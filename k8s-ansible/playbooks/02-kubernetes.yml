@@ -4,13 +4,13 @@
   tasks:
     - name: Add Kubernetes GPG key
       get_url:
-        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        url: https://pkgs.k8s.io/core:/stable:/v1.32/rpm/repodata/repomd.xml.key
         dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
         mode: '0644'
 
     - name: Add Kubernetes APT repository
       apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/rpm/"
         filename: kubernetes
         state: present
 
