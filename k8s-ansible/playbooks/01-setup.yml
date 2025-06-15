@@ -20,14 +20,18 @@
       command: dpkg --remove-architecture i386
       ignore_errors: yes
 
-    - name: Add Docker GPG key
-      get_url:
+    - name: Remove i386 architecture to avoid APT warnings
+      command: dpkg --remove-architecture i386
+      ignore_errors: yes
+
+    - name: Add Docker GPG key (modern format)
+      ansible.builtin.get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
         dest: /usr/share/keyrings/docker.gpg
         mode: '0644'
 
-    - name: Add Docker APT repo
-      apt_repository:
+    - name: Add Docker APT repository (for Ubuntu noble)
+      ansible.builtin.apt_repository:
         repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
         filename: docker
         state: present
