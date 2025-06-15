@@ -2,9 +2,19 @@
   hosts: all
   become: yes
   tasks:
-    - name: Install dependencies
+    - name: Remove i386 architecture to avoid APT issues
+      command: dpkg --remove-architecture i386
+      ignore_errors: yes
+
+    - name: Install APT dependencies
       apt:
-        name: ['apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common']
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
         update_cache: yes
 
     - name: Disable swap
@@ -16,38 +26,48 @@
         regexp: '^([^#].*swap.*)$'
         replace: '# \1'
 
-    - name: Remove i386 architecture
-      command: dpkg --remove-architecture i386
-      ignore_errors: yes
+    ######################################################
+    # 🐳 Docker Repository (Ubuntu 24.04 / noble)
+    ######################################################
 
-    - name: Remove i386 architecture to avoid APT warnings
-      command: dpkg --remove-architecture i386
-      ignore_errors: yes
-
-    - name: Add Docker GPG key (modern format)
-      ansible.builtin.get_url:
+    - name: Add Docker GPG key (secure method)
+      get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
         dest: /usr/share/keyrings/docker.gpg
         mode: '0644'
 
-    - name: Add Docker APT repository (for Ubuntu noble)
-      ansible.builtin.apt_repository:
+    - name: Add Docker repository for Ubuntu noble
+      apt_repository:
         repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
         filename: docker
         state: present
 
-    - name: Install containerd
+    ######################################################
+    # ☸️ Kubernetes Repository (still uses xenial)
+    ######################################################
+
+    - name: Add Kubernetes GPG key
+      get_url:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+        mode: '0644'
+
+    - name: Add Kubernetes APT repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
+        filename: kubernetes
+        state: present
+
+    ######################################################
+    # Update and install core container tools
+    ######################################################
+
+    - name: Update apt cache after adding repos
       apt:
-        name: containerd.io
         update_cache: yes
 
-    - name: Create containerd config
-      shell: |
-        mkdir -p /etc/containerd
-        containerd config default > /etc/containerd/config.toml
-
-    - name: Restart containerd
-      systemd:
-        name: containerd
-        state: restarted
-        enabled: yes
+    - name: Install containerd
+      apt:
+        name:
+          - containerd.io
+        state: present
