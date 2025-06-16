@@ -16,7 +16,7 @@
           - gnupg
           - lsb-release
           - software-properties-common
-        update_cache: yes
+        update_cache: no
 
     - name: Disable swap
       command: swapoff -a
@@ -74,6 +74,10 @@
     - name: Show apt update output
       debug:
         var: apt_update.stderr_lines
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
     - name: Install containerd and Kubernetes components
       apt:
