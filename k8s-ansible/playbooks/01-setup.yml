@@ -258,23 +258,40 @@
   hosts: master
   become: yes
   tasks: 
-    - name: Initialize the Kubernetes control-plane
-      command: kubeadm init --pod-network-cidr=10.244.0.0/16
-      register: kubeadm_init
+    - name: Initialize Kubernetes control-plane
+      shell: |
+        kubeadm init --pod-network-cidr=10.244.0.0/16 \
+          --upload-certs
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Save join command
+    - name: Save kubeconfig for root
       copy:
-        content: "{{ kubeadm_init.stdout_lines | select('search', 'kubeadm join') | list | join('\n') }}"
-        dest: /tmp/kubeadm_join_cmd.sh
-        mode: 0755
+        src: /etc/kubernetes/admin.conf
+        dest: ~/.kube/config
+        remote_src: true
+        mode: '0644'
 
-    - name: Set up kubeconfig for root user
+    - name: Calculate CA cert SHA256 hash
       shell: |
-        mkdir -p $HOME/.kube
-        cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-        chown $(id -u):$(id -g) $HOME/.kube/config
+        openssl x509 -in /etc/kubernetes/pki/ca.crt -pubkey -noout \
+          | openssl pkey -pubin -outform DER \
+          | openssl dgst -sha256 -hex \
+          | sed 's/^.* //'
+      register: ca_hash
+
+    - name: Generate full join command with CA hash
+      shell: kubeadm token create --print-join-command
+      register: raw_join
+
+    - name: Store join command fact
+      set_fact:
+        join_command: "{{ raw_join.stdout }} --discovery-token-ca-cert-hash sha256:{{ ca_hash.stdout }}"
+
+    - name: Share join command with workers
+      add_host:
+        name: "JOIN_CMD"
+        join_cmd: "{{ join_command }}"
 
     - name: Install Flannel network plugin
       shell: |
@@ -286,24 +303,13 @@
 - name: Join worker nodes to the cluster
   hosts: worker
   become: yes
+  gather_facts: false
   tasks:
-    - name: Fetch join script from master to controller
-      become: true
-      fetch:
-        src: /tmp/kubeadm_join_cmd.sh
-        dest: /tmp/kubeadm_join_cmd.sh
-        flat: yes
-      delegate_to: master
+    - name: Retrieve join command
+      set_fact:
+        my_join_cmd: "{{ hostvars['JOIN_CMD']['join_cmd'] }}"
 
-    - name: Copy join script from controller to worker
-      become: true
-      copy:
-        src: /tmp/kubeadm_join_cmd.sh
-        dest: /tmp/kubeadm_join_cmd.sh
-        mode: '0755'
-
-    - name: Join node to Kubernetes cluster
-      become: true
-      shell: bash /tmp/kubeadm_join_cmd.sh
+    - name: Join node to Kubernetes
+      shell: "{{ my_join_cmd }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
