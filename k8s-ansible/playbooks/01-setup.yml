@@ -292,6 +292,8 @@
         mode: pull
         src: /tmp/kubeadm_join_cmd.sh
         dest: /tmp/kubeadm_join_cmd.sh
+        rsync_path: rsync
+      delegate_to: master
 
     - name: Ensure join script is executable
       file:
