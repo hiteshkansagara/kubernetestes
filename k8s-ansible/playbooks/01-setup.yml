@@ -51,17 +51,23 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
-    - name: Download Kubernetes GPG key
-      get_url:
-        url: https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key
-        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
-        mode: '0644'
+    - name: Create keyring directory for Kubernetes if not exists
+      file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: '0755'
 
-    - name: Add Kubernetes repository
-      apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /"
-        filename: kubernetes
-        state: present
+    - name: Download Kubernetes GPG key and save to keyring
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+
+    - name: Add Kubernetes APT repository manually
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+      content: |
+        deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /
 
     ############################################################
     # 🧼 Update cache and install containerd + Kubernetes
