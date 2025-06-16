@@ -240,7 +240,8 @@
         mode: '0755'
 
     - name: Generate default containerd config if missing
-      command: containerd config default
+      shell: |
+        containerd config default > /etc/containerd/config.toml
       args:
         creates: /etc/containerd/config.toml
 
