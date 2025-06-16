@@ -31,17 +31,23 @@
     # 🐳 Docker Repository (use jammy for noble)
     ######################################################
 
-    - name: Add Docker GPG key (secure method)
-      get_url:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        dest: /usr/share/keyrings/docker.gpg
-        mode: '0644'
+    - name: Add Docker GPG key (ASCII-armored)
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor --yes -o /usr/share/keyrings/docker-archive-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/docker-archive-keyring.gpg
 
-    - name: Add Docker repository for Ubuntu (using jammy)
+    - name: Add Docker repository for Ubuntu (jammy)
       apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable"
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu jammy stable"
         filename: docker
         state: present
+
+    - name: Remove deprecated Docker GPG key from trusted.gpg
+      file:
+        path: /etc/apt/trusted.gpg
+        state: absent
+      ignore_errors: yes
 
     ######################################################
     # ☸️ Kubernetes Repository (correct DEB repo)
