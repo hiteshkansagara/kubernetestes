@@ -67,6 +67,7 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
+
     - name: Check if Kubernetes packages are installed
       shell: dpkg -l kubelet kubeadm kubectl | grep '^ii'
       register: k8s_installed
@@ -81,6 +82,11 @@
       command: kubeadm reset -f
       ignore_errors: yes
 
+    - name: Remove Kubernetes APT repo file
+      file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
     - name: Remove Kubernetes packages (kubelet, kubeadm, kubectl, CNI)
       apt:
         name:
@@ -91,12 +97,7 @@
           - kube*
         state: absent
         purge: yes
-        autoremove: yes
-
-    - name: Remove Kubernetes APT repo file
-      file:
-        path: /etc/apt/sources.list.d/kubernetes.list
-        state: absent
+        autoremove: yes    
 
     - name: Clean up Kubernetes state and configuration
       file:
