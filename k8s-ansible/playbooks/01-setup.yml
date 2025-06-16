@@ -51,11 +51,11 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
-    - name: Add Kubernetes GPG key
-      shell: |
-        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
-      args:
-        creates: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key
+        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+        mode: '0644'
 
     - name: Add Kubernetes repository
       apt_repository:
