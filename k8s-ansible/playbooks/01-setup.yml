@@ -105,14 +105,18 @@
       apt:
         update_cache: yes
 
-    - name: Install containerd and Kubernetes components
+    - name: Install containerd and specific Kubernetes components
+      vars:
+        kubernetes_version: "1.32.0-00"
+
       apt:
         name:
           - containerd.io
-          - kubelet
-          - kubeadm
-          - kubectl
+          - "kubelet={{ kubernetes_version }}"
+          - "kubeadm={{ kubernetes_version }}"
+          - "kubectl={{ kubernetes_version }}"
         state: present
+        update_cache: yes
         allow_downgrade: yes
 
     - name: Hold Kubernetes packages to prevent automatic updates
