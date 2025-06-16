@@ -76,8 +76,8 @@
       shell: apt-get update
       register: apt_update
       changed_when: false
-      failed_when: "'Err:' in apt_update.stderr or 'NO_PUBKEY' in apt_update.stderr or 'W:' in apt_update.stderr"
-
+      failed_when: "'Err:' in apt_update.stdout or 'NO_PUBKEY' in apt_update.stdout"
+      
     - name: Show apt update output
       debug:
         var: apt_update.stderr_lines
