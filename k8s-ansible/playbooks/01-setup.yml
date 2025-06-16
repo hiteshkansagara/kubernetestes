@@ -34,7 +34,7 @@
       file:
         path: /etc/apt/sources.list.d/docker.list
         state: absent
-        
+
     - name: Add Docker GPG key (modern method)
       shell: |
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg
@@ -65,8 +65,15 @@
     ############################################################
     # 🧼 Update cache and install containerd + Kubernetes
     ############################################################
-    - name: Update apt cache
-      command: apt-get update
+    - name: Manually update apt cache and capture output
+      shell: apt-get update
+      register: apt_update
+      changed_when: false
+      failed_when: "'Err:' in apt_update.stderr or 'NO_PUBKEY' in apt_update.stderr or 'W:' in apt_update.stderr"
+
+    - name: Show apt update output
+      debug:
+        var: apt_update.stderr_lines
 
     - name: Install containerd and Kubernetes components
       apt:
