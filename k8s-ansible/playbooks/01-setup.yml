@@ -36,7 +36,7 @@
         state: absent
 
     - name: Remove Docker noble sources from /etc/apt/sources.list
-      ineinfile:
+      lineinfile:
         path: /etc/apt/sources.list
         regexp: '^deb .*docker.com.*noble'
         state: absent
