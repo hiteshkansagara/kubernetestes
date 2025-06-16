@@ -107,7 +107,8 @@
           - kubernetes-cni
         state: absent
         purge: yes
-        autoremove: yes    
+        autoremove: yes  
+        allow_change_held_packages: true  
 
     - name: Clean up Kubernetes state and configuration
       file:
