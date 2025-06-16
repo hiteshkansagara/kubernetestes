@@ -299,8 +299,10 @@
       file:
         path: /tmp/kubeadm_join_cmd.sh
         mode: '0755'
+      become: true
 
     - name: Join node to Kubernetes cluster
       shell: bash /tmp/kubeadm_join_cmd.sh
       args:
         creates: /etc/kubernetes/kubelet.conf
+      become: true
