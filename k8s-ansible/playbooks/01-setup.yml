@@ -62,10 +62,6 @@
     # Update and install core container tools
     ######################################################
 
-    - name: Update apt cache after adding repos
-      apt:
-        update_cache: yes
-
     - name: Install containerd
       apt:
         name:
