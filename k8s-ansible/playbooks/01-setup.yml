@@ -23,11 +23,6 @@
           - software-properties-common
         update_cache: no
 
-    - name: Set SELinux to permissive mode
-      ansible.posix.selinux:
-        policy: targeted
-        state: permissive
-
     - name: Disable swap
       command: swapoff -a
 
