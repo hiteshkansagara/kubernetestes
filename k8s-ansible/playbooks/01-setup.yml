@@ -7,6 +7,11 @@
       command: dpkg --remove-architecture i386
       ignore_errors: yes
 
+    - name: Remove Kubernetes APT repo file
+      file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
     - name: Install dependencies
       apt:
         name:
