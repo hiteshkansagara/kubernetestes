@@ -46,6 +46,11 @@
         path: /usr/share/keyrings/docker.gpg
         state: absent
 
+    - name: Remove invalid Docker noble repository file if it exists
+      file:
+        path: /etc/apt/sources.list.d/archive_uri-https_download_docker_com_linux_ubuntu-noble.list
+        state: absent
+
     - name: Download and store Docker GPG key (dearmored)
       shell: |
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg
