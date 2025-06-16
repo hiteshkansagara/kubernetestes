@@ -111,17 +111,17 @@
         state: directory
         mode: '0755'
 
-    - name: Add Kubernetes GPG key
-      get_url:
-        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
-        mode: '0644'
+    - name: Add Kubernetes GPG key for v1.30
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key \
+          | gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg
 
-    - name: Add official Kubernetes APT repo
+    - name: Add Kubernetes apt repo v1.30
       copy:
         dest: /etc/apt/sources.list.d/kubernetes.list
         content: |
-          deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main
+          deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] \
+            https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /
         mode: '0644'
 
     ############################################################
