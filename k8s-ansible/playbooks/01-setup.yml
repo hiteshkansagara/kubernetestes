@@ -122,10 +122,19 @@
         state: directory
         mode: '0755'
 
-    - name: Add Kubernetes GPG key for v1.30
-      shell: |
-        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key \
-          | gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: "https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key"
+        dest: "/etc/apt/keyrings/kubernetes-archive-keyring.asc"
+        mode: '0644'
+
+    - name: Convert Kubernetes key to GPG format
+      command: >
+        gpg --batch --yes --dearmor
+        --output /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+        /etc/apt/keyrings/kubernetes-archive-keyring.asc
+      args:
+        creates: /etc/apt/keyrings/kubernetes-archive-keyring.gpg
 
     - name: Add Kubernetes apt repo v1.30
       copy:
