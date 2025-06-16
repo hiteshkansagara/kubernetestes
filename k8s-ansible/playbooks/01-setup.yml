@@ -67,6 +67,12 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
+    - name: Unhold Kubernetes packages if held
+      ansible.builtin.shell: |
+        apt-mark unhold kubelet kubeadm kubectl
+      register: k8s_unhold
+      changed_when: "'kubelet' in k8s_unhold.stdout or 'kubeadm' in k8s_unhold.stdout or 'kubectl' in k8s_unhold.stdout"
+    
     - name: Reset kubeadm state (ignoring pre-existing errors)
       command: kubeadm reset -f
       ignore_errors: yes
