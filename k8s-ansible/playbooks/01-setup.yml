@@ -287,23 +287,23 @@
   hosts: worker
   become: yes
   tasks:
-    - name: Pull kubeadm join script from master
-      synchronize:
-        mode: pull
+    - name: Fetch join script from master to controller
+      become: true
+      fetch:
         src: /tmp/kubeadm_join_cmd.sh
         dest: /tmp/kubeadm_join_cmd.sh
-        rsync_path: rsync
+        flat: yes
       delegate_to: master
-      become: true
 
-    - name: Ensure join script is executable
-      file:
-        path: /tmp/kubeadm_join_cmd.sh
-        mode: '0755'
+    - name: Copy join script from controller to worker
       become: true
+      copy:
+        src: /tmp/kubeadm_join_cmd.sh
+        dest: /tmp/kubeadm_join_cmd.sh
+        mode: '0755'
 
     - name: Join node to Kubernetes cluster
+      become: true
       shell: bash /tmp/kubeadm_join_cmd.sh
       args:
         creates: /etc/kubernetes/kubelet.conf
-      become: true
