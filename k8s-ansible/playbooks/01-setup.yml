@@ -187,11 +187,11 @@
       register: hold_output
       changed_when: "'hold' in hold_output.stdout"
 
-    - name: Ensure overlay and br_netfilter modules are loaded now and on reboot
+    - name: Ensure overlay and br_netfilter modules are loaded
       community.general.modprobe:
         name: "{{ item }}"
         state: present
-        persistent: yes
+        persistent: present
       loop:
         - overlay
         - br_netfilter
