@@ -217,8 +217,6 @@
   hosts: master
   become: yes
   tasks:
-    - name: Reset containerd config before kubeadm init
-  block:
     - name: Remove custom containerd config
       file:
         path: /etc/containerd/config.toml
