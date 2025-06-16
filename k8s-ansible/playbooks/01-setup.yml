@@ -136,12 +136,11 @@
       args:
         creates: /etc/apt/keyrings/kubernetes-archive-keyring.gpg
 
-    - name: Add Kubernetes apt repo v1.30
+    - name: Add Kubernetes apt repo (v1.30)
       copy:
         dest: /etc/apt/sources.list.d/kubernetes.list
         content: |
-          deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] \
-            https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /
+          deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /
         mode: '0644'
 
     ############################################################
