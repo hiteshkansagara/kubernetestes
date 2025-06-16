@@ -35,6 +35,12 @@
         path: /etc/apt/sources.list.d/docker.list
         state: absent
 
+    - name: Remove Docker noble sources from /etc/apt/sources.list
+      ineinfile:
+        path: /etc/apt/sources.list
+        regexp: '^deb .*docker.com.*noble'
+        state: absent
+
     - name: Remove stale docker keyrings
       file:
         path: /usr/share/keyrings/docker.gpg
