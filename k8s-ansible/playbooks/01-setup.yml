@@ -294,6 +294,7 @@
         dest: /tmp/kubeadm_join_cmd.sh
         rsync_path: rsync
       delegate_to: master
+      become: true
 
     - name: Ensure join script is executable
       file:
