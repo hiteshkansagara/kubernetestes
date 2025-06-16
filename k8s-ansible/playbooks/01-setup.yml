@@ -67,11 +67,15 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
-    - name: Unhold Kubernetes packages if held
-      ansible.builtin.shell: |
-        apt-mark unhold kubelet kubeadm kubectl
-      register: k8s_unhold
-      changed_when: "'kubelet' in k8s_unhold.stdout or 'kubeadm' in k8s_unhold.stdout or 'kubectl' in k8s_unhold.stdout"
+    - name: Check if Kubernetes packages are installed
+      shell: dpkg -l kubelet kubeadm kubectl | grep '^ii'
+      register: k8s_installed
+      ignore_errors: true
+      changed_when: false
+
+    - name: Unhold Kubernetes packages if present
+      shell: apt-mark unhold kubelet kubeadm kubectl
+      when: k8s_installed.rc == 0
     
     - name: Reset kubeadm state (ignoring pre-existing errors)
       command: kubeadm reset -f
