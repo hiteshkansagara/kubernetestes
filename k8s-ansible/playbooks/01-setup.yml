@@ -105,7 +105,6 @@
           - kubeadm
           - kubectl
           - kubernetes-cni
-          - kube*
         state: absent
         purge: yes
         autoremove: yes    
