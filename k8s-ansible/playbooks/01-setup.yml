@@ -67,6 +67,38 @@
     ############################################################
     # ☸ Kubernetes Repo Setup
     ############################################################
+    - name: Reset kubeadm state (ignoring pre-existing errors)
+      command: kubeadm reset -f
+      ignore_errors: yes
+
+    - name: Remove Kubernetes packages (kubelet, kubeadm, kubectl, CNI)
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+          - kubernetes-cni
+          - kube*
+        state: absent
+        purge: yes
+        autoremove: yes
+
+    - name: Remove Kubernetes APT repo file
+      file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
+    - name: Clean up Kubernetes state and configuration
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /etc/cni
+        - ~/.kube
+    
     - name: Create keyring directory for Kubernetes if not exists
       file:
         path: /usr/share/keyrings
