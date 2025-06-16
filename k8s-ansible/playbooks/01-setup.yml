@@ -1,13 +1,13 @@
-- name: Install prerequisites and container runtime
-  hosts: all
+- name: Prepare Kubernetes cluster nodes
+  hosts: k8s_cluster
   become: yes
   tasks:
 
-    - name: Remove i386 architecture to avoid APT issues
+    - name: Remove i386 architecture
       command: dpkg --remove-architecture i386
       ignore_errors: yes
 
-    - name: Install APT dependencies
+    - name: Install dependencies
       apt:
         name:
           - apt-transport-https
@@ -21,63 +21,108 @@
     - name: Disable swap
       command: swapoff -a
 
-    - name: Comment out swap in fstab
+    - name: Permanently disable swap in fstab
       replace:
         path: /etc/fstab
         regexp: '^([^#].*swap.*)$'
         replace: '# \1'
 
-    ######################################################
-    # 🐳 Docker Repository (use jammy for noble)
-    ######################################################
-
-    - name: Add Docker GPG key (ASCII-armored)
+    ############################################################
+    # 🐳 Docker (Jammy fallback) Repo Setup
+    ############################################################
+    - name: Add Docker GPG key
       shell: |
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor --yes -o /usr/share/keyrings/docker-archive-keyring.gpg
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg
       args:
-        creates: /usr/share/keyrings/docker-archive-keyring.gpg
+        creates: /usr/share/keyrings/docker.gpg
 
-    - name: Add Docker repository for Ubuntu (jammy)
+    - name: Add Docker repository
       apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu jammy stable"
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable"
         filename: docker
         state: present
 
-    - name: Remove deprecated Docker GPG key from trusted.gpg
-      file:
-        path: /etc/apt/trusted.gpg
-        state: absent
-      ignore_errors: yes
-
-    ######################################################
-    # ☸️ Kubernetes Repository (correct DEB repo)
-    ######################################################
-
+    ############################################################
+    # ☸ Kubernetes Repo Setup
+    ############################################################
     - name: Add Kubernetes GPG key
       shell: |
         curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
       args:
         creates: /usr/share/keyrings/kubernetes-archive-keyring.gpg
 
-    - name: Add Kubernetes apt repository
+    - name: Add Kubernetes repository
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /"
         filename: kubernetes
         state: present
 
-    ######################################################
-    # 🔁 Fallback APT Update (optional but helpful)
-    ######################################################
-
-    - name: Manually update APT cache (fallback)
+    ############################################################
+    # 🧼 Update cache and install containerd + Kubernetes
+    ############################################################
+    - name: Update apt cache
       command: apt-get update
 
-    ######################################################
-    # Install container runtime
-    ######################################################
-
-    - name: Install containerd
+    - name: Install containerd and Kubernetes components
       apt:
         name:
           - containerd.io
+          - kubelet
+          - kubeadm
+          - kubectl
         state: present
+        allow_downgrade: yes
+
+    - name: Hold Kubernetes packages
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: hold
+
+#################################################################
+- name: Initialize Kubernetes master node
+  hosts: master
+  become: yes
+  tasks:
+    - name: Initialize the Kubernetes control-plane
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: kubeadm_init
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Save join command
+      copy:
+        content: "{{ kubeadm_init.stdout_lines | select('search', 'kubeadm join') | list | join('\n') }}"
+        dest: /tmp/kubeadm_join_cmd.sh
+        mode: 0755
+
+    - name: Set up kubeconfig for root user
+      shell: |
+        mkdir -p $HOME/.kube
+        cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        chown $(id -u):$(id -g) $HOME/.kube/config
+
+    - name: Install Flannel network plugin
+      shell: |
+        kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+#################################################################
+- name: Join worker nodes to the cluster
+  hosts: worker
+  become: yes
+  tasks:
+    - name: Fetch join command from master
+      delegate_to: master
+      fetch:
+        src: /tmp/kubeadm_join_cmd.sh
+        dest: /tmp/kubeadm_join_cmd.sh
+        flat: yes
+
+    - name: Join node to Kubernetes cluster
+      command: "bash /tmp/kubeadm_join_cmd.sh"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
