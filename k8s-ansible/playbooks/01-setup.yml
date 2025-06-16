@@ -240,9 +240,8 @@
         mode: '0755'
 
     - name: Generate default containerd config if missing
-      command: docker_containerd_config
+      command: containerd config default
       args:
-        cmd: containerd config default
         creates: /etc/containerd/config.toml
 
     - name: Use systemd as cgroup driver in containerd
