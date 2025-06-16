@@ -2,6 +2,7 @@
   hosts: all
   become: yes
   tasks:
+
     - name: Remove i386 architecture to avoid APT issues
       command: dpkg --remove-architecture i386
       ignore_errors: yes
@@ -27,7 +28,7 @@
         replace: '# \1'
 
     ######################################################
-    # 🐳 Docker Repository (Ubuntu 24.04 / noble)
+    # 🐳 Docker Repository (use jammy for noble)
     ######################################################
 
     - name: Add Docker GPG key (secure method)
@@ -36,30 +37,37 @@
         dest: /usr/share/keyrings/docker.gpg
         mode: '0644'
 
-    - name: Add Docker repository for Ubuntu noble
+    - name: Add Docker repository for Ubuntu (using jammy)
       apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable"
         filename: docker
         state: present
 
     ######################################################
-    # ☸️ Kubernetes Repository (still uses xenial)
+    # ☸️ Kubernetes Repository (correct DEB repo)
     ######################################################
 
     - name: Add Kubernetes GPG key
       get_url:
-        url: https://pkgs.k8s.io/core:/stable:/v1.32/rpm/repodata/repomd.xml.key
+        url: https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key
         dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
         mode: '0644'
 
     - name: Add Kubernetes APT repository
       apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/rpm/"
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /"
         filename: kubernetes
         state: present
 
     ######################################################
-    # Update and install core container tools
+    # 🔁 Fallback APT Update (optional but helpful)
+    ######################################################
+
+    - name: Manually update APT cache (fallback)
+      command: apt-get update
+
+    ######################################################
+    # Install container runtime
     ######################################################
 
     - name: Install containerd
