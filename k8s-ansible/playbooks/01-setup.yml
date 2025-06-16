@@ -23,6 +23,11 @@
           - software-properties-common
         update_cache: no
 
+    - name: Set SELinux to permissive mode
+      ansible.posix.selinux:
+        policy: targeted
+        state: permissive
+
     - name: Disable swap
       command: swapoff -a
 
@@ -187,11 +192,73 @@
       register: hold_output
       changed_when: "'hold' in hold_output.stdout"
 
+    - name: Ensure overlay and br_netfilter modules are loaded now and on reboot
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+        persistent: yes
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Apply essential sysctl settings for Kubernetes networking
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { key: "net.bridge.bridge-nf-call-iptables",  value: "1" }
+        - { key: "net.ipv4.ip_forward",                   value: "1" }
+
 #################################################################
 - name: Initialize Kubernetes master node
   hosts: master
   become: yes
   tasks:
+    - name: Reset containerd config before kubeadm init
+  block:
+    - name: Remove custom containerd config
+      file:
+        path: /etc/containerd/config.toml
+        state: absent
+
+    - name: Regenerate default containerd config
+      command: containerd config default | tee /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Restart containerd
+      service:
+        name: containerd
+        state: restarted
+
+    - name: Ensure config directory exists
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config
+      command: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Use systemd as cgroup driver in containerd
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^\s*SystemdCgroup\s*='
+        line: '            SystemdCgroup = true'
+        backrefs: yes
+
+    - name: Restart and enable containerd service
+      ansible.builtin.systemd_service:
+        name: containerd
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
     - name: Initialize the Kubernetes control-plane
       command: kubeadm init --pod-network-cidr=10.244.0.0/16
       register: kubeadm_init
