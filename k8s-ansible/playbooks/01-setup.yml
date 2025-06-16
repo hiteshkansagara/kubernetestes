@@ -115,13 +115,12 @@
         state: present
         allow_downgrade: yes
 
-    - name: Hold Kubernetes packages
-      apt:
-        name:
-          - kubelet
-          - kubeadm
-          - kubectl
-        state: hold
+    - name: Hold Kubernetes packages to prevent automatic updates
+      shell: |
+        apt-mark hold kubelet kubeadm kubectl
+      args:
+        warn: false
+      changed_when: false
 
 #################################################################
 - name: Initialize Kubernetes master node
