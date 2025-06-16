@@ -265,6 +265,12 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
+    - name: Ensure ~/.kube directory exists
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+
     - name: Save kubeconfig for root
       copy:
         src: /etc/kubernetes/admin.conf
