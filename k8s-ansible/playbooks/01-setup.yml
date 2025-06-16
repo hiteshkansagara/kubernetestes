@@ -54,12 +54,12 @@
     ######################################################
 
     - name: Add Kubernetes GPG key
-      get_url:
-        url: https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key
-        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
-        mode: '0644'
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/kubernetes-archive-keyring.gpg
 
-    - name: Add Kubernetes APT repository
+    - name: Add Kubernetes apt repository
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /"
         filename: kubernetes
