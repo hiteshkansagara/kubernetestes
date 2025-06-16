@@ -35,6 +35,11 @@
         path: /etc/apt/sources.list.d/docker.list
         state: absent
 
+    - name: Remove stale docker keyrings
+      file:
+        path: /usr/share/keyrings/docker.gpg
+        state: absent
+
     - name: Download and store Docker GPG key (dearmored)
       shell: |
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg
@@ -72,12 +77,15 @@
     ############################################################
     # 🧼 Update cache and install containerd + Kubernetes
     ############################################################
+    - name: Clean apt cache
+      shell: apt-get clean && rm -rf /var/lib/apt/lists/*
+
     - name: Manually update apt cache and capture output
       shell: apt-get update
       register: apt_update
       changed_when: false
       failed_when: "'Err:' in apt_update.stdout or 'NO_PUBKEY' in apt_update.stdout"
-      
+
     - name: Show apt update output
       debug:
         var: apt_update.stderr_lines
