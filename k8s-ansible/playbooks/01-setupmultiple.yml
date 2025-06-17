@@ -261,7 +261,10 @@
   tasks:
     - name: Initialize Kubernetes control-plane
       shell: |
-        kubeadm init --pod-network-cidr=10.244.0.0/16 --upload-certs
+        kubeadm init \
+          --control-plane-endpoint "192.168.41.112:6443" \
+          --upload-certs \
+          --pod-network-cidr=10.244.0.0/16
       args:
         creates: /etc/kubernetes/admin.conf
 
@@ -278,50 +281,36 @@
         remote_src: true
         mode: '0644'
 
-    - name: Get CA cert hash
+    - name: Generate join command with certs
       shell: |
-        openssl x509 -in /etc/kubernetes/pki/ca.crt -pubkey -noout \
-        | openssl pkey -pubin -outform DER \
-        | openssl dgst -sha256 -hex \
-        | sed 's/^.* //'
-      register: ca_hash
+        kubeadm token create --print-join-command --ttl 2h \
+          && echo "CERT_KEY=$(kubeadm init phase upload-certs --upload-certs | tail -n1)"
+      register: join_out
 
-    - name: Generate join token
-      shell: kubeadm token create
-      register: token_out
+    - name: Extract join command and cert key
+      set_fact:
+        join_cmd: "{{ join_out.stdout_lines[0] }} --control-plane --certificate-key {{ join_out.stdout_lines[1].split('=')[1] }}"
 
-    - name: Upload certificate key
-      shell: kubeadm init phase upload-certs --upload-certs | tail -1
-      register: cert_key_out
-
-    - name: Share join commands
+    - name: Share join command with other masters and workers
       add_host:
-        name: "JOIN_CMDS"
-        master_join_cmd: >
-          kubeadm join {{ ansible_host }}:6443
-          --token {{ token_out.stdout }}
-          --discovery-token-ca-cert-hash sha256:{{ ca_hash.stdout }}
-          --control-plane --certificate-key {{ cert_key_out.stdout }}
+        name: JOIN_INFO
+        join_command: "{{ join_cmd }}"
 
-        worker_join_cmd: >
-          kubeadm join {{ ansible_host }}:6443
-          --token {{ token_out.stdout }}
-          --discovery-token-ca-cert-hash sha256:{{ ca_hash.stdout }}
-
-    - name: Install Flannel CNI
+    - name: Install Flannel network plugin
       shell: |
         kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
 
 ########################################################
-- name: Join additional master nodes to the cluster
+- name: Join remaining master nodes
   hosts: master[1:]
   become: yes
+  gather_facts: false
   tasks:
-    - name: Get join command
+    - name: Get join command from primary master
       set_fact:
-        join_cmd: "{{ hostvars['JOIN_CMDS']['master_join_cmd'] }}"
+        join_cmd: "{{ hostvars['JOIN_INFO']['join_command'] }}"
 
     - name: Join master node to control plane
       shell: "{{ join_cmd }}"
@@ -329,15 +318,16 @@
         creates: /etc/kubernetes/kubelet.conf
 
 #################################################################
-- name: Join worker nodes
+- name: Join worker nodes to the cluster
   hosts: worker
   become: yes
+  gather_facts: false
   tasks:
-    - name: Get worker join command
+    - name: Get join command from primary master
       set_fact:
-        join_cmd: "{{ hostvars['JOIN_CMDS']['worker_join_cmd'] }}"
+        join_cmd: "{{ hostvars['JOIN_INFO']['join_command'].split('--control-plane')[0] | trim }}"
 
-    - name: Join node to Kubernetes cluster
+    - name: Join worker node to the cluster
       shell: "{{ join_cmd }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
