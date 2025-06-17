@@ -46,6 +46,7 @@
           - kubectl
         state: absent
         purge: true
+        allow_change_held_packages: true
 
     - name: Remove Docker (if installed via apt)
       apt:
