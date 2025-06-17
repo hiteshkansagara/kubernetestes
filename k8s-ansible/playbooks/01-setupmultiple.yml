@@ -187,6 +187,7 @@
         state: present
         update_cache: yes
         allow_downgrade: yes
+        allow-change-held-packages: yes
 
     - name: Hold Kubernetes packages to prevent automatic updates
       shell: apt-mark hold kubelet kubeadm kubectl
