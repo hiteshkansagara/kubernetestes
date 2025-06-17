@@ -1,0 +1,82 @@
+- name: Destroy Kubernetes Cluster Completely
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Reset kubeadm
+      command: kubeadm reset -f
+      ignore_errors: true
+
+    - name: Stop kubelet service
+      systemd:
+        name: kubelet
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Stop container runtime (Docker)
+      systemd:
+        name: docker
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Flush iptables
+      command: iptables -F
+
+    - name: Remove Kubernetes config and data directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/etcd
+        - /var/lib/kubelet
+        - /etc/cni
+        - /opt/cni
+        - /var/run/kubernetes
+        - /root/.kube
+        - /home/dev/.kube  # for non-root users, adjust if needed
+
+    - name: Remove kubeadm, kubelet, kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: absent
+        purge: true
+
+    - name: Remove Docker (if installed via apt)
+      apt:
+        name: docker.io
+        state: absent
+        purge: true
+
+    - name: Remove Docker CE (if installed via docker-ce)
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: absent
+        purge: true
+
+    - name: Remove Docker directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/docker
+        - /etc/docker
+
+    - name: Autoremove and clean package cache
+      apt:
+        autoremove: yes
+        purge: yes
+        clean: yes
+
+    - name: Reboot the node (optional, if you want a clean state)
+      reboot:
+        reboot_timeout: 600
+      when: reboot_after_cleanup | default(false)
