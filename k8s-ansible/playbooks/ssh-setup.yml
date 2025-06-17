@@ -1,0 +1,37 @@
+- name: Ensure SSH key exists on Ansible control node
+  hosts: localhost
+  tasks:
+    - name: Check if SSH key exists
+      stat:
+        path: ~/.ssh/id_rsa.pub
+      register: ssh_key
+
+    - name: Generate SSH key if not present
+      command: ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -q -N ""
+      when: not ssh_key.stat.exists
+
+- name: Distribute SSH public key to Kubernetes nodes
+  hosts: all
+  become: true
+  vars:
+    ansible_ssh_pass: "{{ ssh_pass }}"
+  tasks:
+    - name: Install openssh-server if not installed
+      apt:
+        name: openssh-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure user has a .ssh directory
+      file:
+        path: /home/{{ ansible_user }}/.ssh
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Add SSH public key to authorized_keys
+      authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
