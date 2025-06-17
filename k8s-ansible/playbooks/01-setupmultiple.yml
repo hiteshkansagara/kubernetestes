@@ -1,0 +1,342 @@
+- name: Prepare Kubernetes cluster nodes
+  hosts: all
+  become: yes
+  tasks:
+
+    - name: Remove i386 architecture
+      command: dpkg --remove-architecture i386
+      ignore_errors: yes
+
+    - name: Remove Kubernetes APT repo file
+      file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
+    - name: Install dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+        update_cache: no
+
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Permanently disable swap in fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*swap.*)$'
+        replace: '# \1'
+
+    ############################################################
+    # 🐳 Docker (Jammy fallback) Repo Setup
+    ############################################################
+    - name: Remove old Docker repo if present
+      file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+
+    - name: Remove Docker noble sources from /etc/apt/sources.list
+      lineinfile:
+        path: /etc/apt/sources.list
+        regexp: '^deb .*docker.com.*noble'
+        state: absent
+
+    - name: Remove stale docker keyrings
+      file:
+        path: /usr/share/keyrings/docker.gpg
+        state: absent
+
+    - name: Remove invalid Docker noble repository file if it exists
+      file:
+        path: /etc/apt/sources.list.d/archive_uri-https_download_docker_com_linux_ubuntu-noble.list
+        state: absent
+
+    - name: Download and store Docker GPG key (dearmored)
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg
+      args:
+        creates: /usr/share/keyrings/docker.gpg
+
+    - name: Add Docker APT repository manually
+      copy:
+        dest: /etc/apt/sources.list.d/docker.list
+        content: |
+          deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable
+        mode: '0644'
+
+    ############################################################
+    # ☸ Kubernetes Repo Setup
+    ############################################################
+    - name: Remove Kubernetes APT repo file
+      file:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        state: absent
+
+    - name: Check if Kubernetes packages are installed
+      shell: dpkg -l kubelet kubeadm kubectl | grep '^ii'
+      register: k8s_installed
+      ignore_errors: true
+      changed_when: false
+
+    - name: Unhold Kubernetes packages if present
+      shell: apt-mark unhold kubelet kubeadm kubectl
+      when: k8s_installed.rc == 0
+
+    - name: Check if kubeadm is installed
+      shell: which kubeadm
+      register: kubeadm_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Reset kubeadm if installed
+      command: kubeadm reset -f
+      when: kubeadm_installed.rc == 0
+      ignore_errors: yes   
+
+    - name: Check if Kubernetes is installed
+      shell: dpkg -l kubelet kubeadm kubectl | grep '^ii'
+      register: k8s_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Remove Kubernetes components
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: absent
+        purge: yes
+        autoremove: yes
+        allow_change_held_packages: true
+      when: k8s_installed.rc == 0
+
+    - name: Clean up Kubernetes state and configuration
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /etc/cni
+        - ~/.kube
+    
+    - name: Create keyring directory for Kubernetes if not exists
+      file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: "https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key"
+        dest: "/etc/apt/keyrings/kubernetes-archive-keyring.asc"
+        mode: '0644'
+
+    - name: Convert Kubernetes key to GPG format
+      command: >
+        gpg --batch --yes --dearmor
+        --output /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+        /etc/apt/keyrings/kubernetes-archive-keyring.asc
+      args:
+        creates: /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+
+    - name: Add Kubernetes apt repo (v1.30)
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: |
+          deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /
+        mode: '0644'
+
+    ############################################################
+    # 🧼 Update cache and install containerd + Kubernetes
+    ############################################################
+    - name: Clean apt cache
+      shell: apt-get clean && rm -rf /var/lib/apt/lists/*
+
+    - name: Manually update apt cache and capture output
+      shell: apt-get update
+      register: apt_update
+      changed_when: false
+      failed_when: "'Err:' in apt_update.stdout or 'NO_PUBKEY' in apt_update.stdout"
+
+    - name: Show apt update output
+      debug:
+        var: apt_update.stderr_lines
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install containerd and specific Kubernetes components
+      vars:
+        kubernetes_version: "1.30.0-1.1"
+
+      apt:
+        name:
+          - containerd.io
+          - "kubelet={{ kubernetes_version }}"
+          - "kubeadm={{ kubernetes_version }}"
+          - "kubectl={{ kubernetes_version }}"
+        state: present
+        update_cache: yes
+        allow_downgrade: yes
+
+    - name: Hold Kubernetes packages to prevent automatic updates
+      shell: apt-mark hold kubelet kubeadm kubectl
+      register: hold_output
+      changed_when: "'hold' in hold_output.stdout"
+
+    - name: Ensure overlay and br_netfilter modules are loaded
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+        persistent: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Apply essential sysctl settings for Kubernetes networking
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { key: "net.bridge.bridge-nf-call-iptables",  value: "1" }
+        - { key: "net.ipv4.ip_forward",                   value: "1" }
+
+    - name: Remove custom containerd config
+      file:
+        path: /etc/containerd/config.toml
+        state: absent
+
+    - name: Regenerate default containerd config
+      command: containerd config default | tee /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Restart containerd
+      service:
+        name: containerd
+        state: restarted
+
+    - name: Ensure config directory exists
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config if missing
+      shell: |
+        containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Use systemd as cgroup driver in containerd
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^\s*SystemdCgroup\s*='
+        line: '            SystemdCgroup = true'
+        backrefs: yes
+
+    - name: Restart and enable containerd service
+      ansible.builtin.systemd_service:
+        name: containerd
+        state: restarted
+        enabled: true
+        daemon_reload: true
+#################################################################
+- name: Initialize first Kubernetes master node
+  hosts: master[0]
+  become: yes
+  tasks:
+    - name: Initialize Kubernetes control-plane
+      shell: |
+        kubeadm init --pod-network-cidr=10.244.0.0/16 --upload-certs
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Ensure ~/.kube directory exists
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+
+    - name: Save kubeconfig for root
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: true
+        mode: '0644'
+
+    - name: Get CA cert hash
+      shell: |
+        openssl x509 -in /etc/kubernetes/pki/ca.crt -pubkey -noout \
+        | openssl pkey -pubin -outform DER \
+        | openssl dgst -sha256 -hex \
+        | sed 's/^.* //'
+      register: ca_hash
+
+    - name: Generate join token
+      shell: kubeadm token create
+      register: token_out
+
+    - name: Upload certificate key
+      shell: kubeadm init phase upload-certs --upload-certs | tail -1
+      register: cert_key_out
+
+    - name: Share join commands
+      add_host:
+        name: "JOIN_CMDS"
+        master_join_cmd: >
+          kubeadm join {{ ansible_host }}:6443
+          --token {{ token_out.stdout }}
+          --discovery-token-ca-cert-hash sha256:{{ ca_hash.stdout }}
+          --control-plane --certificate-key {{ cert_key_out.stdout }}
+
+        worker_join_cmd: >
+          kubeadm join {{ ansible_host }}:6443
+          --token {{ token_out.stdout }}
+          --discovery-token-ca-cert-hash sha256:{{ ca_hash.stdout }}
+
+    - name: Install Flannel CNI
+      shell: |
+        kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+########################################################
+- name: Join additional master nodes to the cluster
+  hosts: master[1:]
+  become: yes
+  tasks:
+    - name: Get join command
+      set_fact:
+        join_cmd: "{{ hostvars['JOIN_CMDS']['master_join_cmd'] }}"
+
+    - name: Join master node to control plane
+      shell: "{{ join_cmd }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+#################################################################
+- name: Join worker nodes
+  hosts: worker
+  become: yes
+  tasks:
+    - name: Get worker join command
+      set_fact:
+        join_cmd: "{{ hostvars['JOIN_CMDS']['worker_join_cmd'] }}"
+
+    - name: Join node to Kubernetes cluster
+      shell: "{{ join_cmd }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
