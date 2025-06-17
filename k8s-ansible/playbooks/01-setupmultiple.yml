@@ -100,7 +100,7 @@
 
     - name: Check if Kubernetes is installed
       shell: dpkg -l kubelet kubeadm kubectl | grep '^ii'
-      register: k8s_installed
+      register: kubelet_installed
       failed_when: false
       changed_when: false
 
@@ -114,7 +114,7 @@
         purge: yes
         autoremove: yes
         allow_change_held_packages: true
-      when: k8s_installed.rc == 0
+      when: kubelet_installed.rc == 0
 
     - name: Clean up Kubernetes state and configuration
       file:
