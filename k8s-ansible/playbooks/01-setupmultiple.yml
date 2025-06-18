@@ -255,6 +255,21 @@
         enabled: true
         daemon_reload: true
 #################################################################
+- name: Stop kubelet service
+  ansible.builtin.service:
+    name: kubelet
+    state: stopped
+    enabled: false
+  ignore_errors: yes
+- name: Ensure port 6443 is free
+  ansible.builtin.shell: |
+    pid=$(lsof -t -i:6443 || true)
+    if [ -n "$pid" ]; then
+      kill -9 $pid
+    fi
+  args:
+    executable: /bin/bash
+  become: yes
 - name: Initialize first Kubernetes master node
   hosts: master[0]
   become: yes
