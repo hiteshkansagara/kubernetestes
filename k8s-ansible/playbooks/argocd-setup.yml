@@ -47,6 +47,10 @@
       retries: 20
       delay: 6
       until: deployments.resources | length > 0
+      loop:
+        - argocd-server
+        - argocd-repo-server
+        - argocd-application-controller
 
     - name: Patch Argo CD replicas for HA
       kubernetes.core.k8s:
