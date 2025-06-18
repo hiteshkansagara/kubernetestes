@@ -45,7 +45,7 @@
         namespace: "{{ argocd_namespace }}"
         name: argocd-application-controller
       register: controller_deployment
-      retries: 10
+      retries: 40
       delay: 6
       until: controller_deployment.resources | length > 0
 
