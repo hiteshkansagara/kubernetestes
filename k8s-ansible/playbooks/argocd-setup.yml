@@ -39,6 +39,16 @@
       environment:
         KUBECONFIG: "{{ kubeconfig_path }}"
 
+    - name: Wait until Argo CD controller deployment is created
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ argocd_namespace }}"
+        name: argocd-application-controller
+      register: controller_deployment
+      retries: 10
+      delay: 6
+      until: controller_deployment.resources | length > 0
+
     - name: Patch deployments for custom replica count
       kubernetes.core.k8s_json_patch:
         kind: Deployment
