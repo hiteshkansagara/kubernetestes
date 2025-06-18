@@ -13,7 +13,7 @@ defaults
     timeout server 1m
 
 frontend kubernetes
-    bind *:6443
+    bind *:8443
     default_backend kubernetes-masters
 
 backend kubernetes-masters
