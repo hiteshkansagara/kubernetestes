@@ -39,8 +39,19 @@
         name: kubelet
         state: stopped
         enabled: false
+      loop:
+        - kubelet
+        - containerd
       when: "'kubelet' in ansible_facts.services"
       ignore_errors: true
+
+    - name: Unmount all /var/lib/kubelet related mounts (safely and recursively)
+      ansible.builtin.shell: |
+        for mnt in $(mount | grep '/var/lib/kubelet' | awk '{print $3}' | sort -r); do
+          umount -l "$mnt" || true
+        done
+      args:
+        executable: /bin/bash
 
     - name: Stop docker service if present
       ansible.builtin.systemd:
