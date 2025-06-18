@@ -61,7 +61,7 @@
           spec:
             replicas: "{{ replicas }}"
         merge_type:
-          - merge
+          - strategic
       loop:
         - argocd-application-controller
         - argocd-repo-server
