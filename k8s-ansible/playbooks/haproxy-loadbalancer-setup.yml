@@ -17,7 +17,7 @@
 
     - name: Configure HAProxy
       template:
-        src: home/dev/kubernetestes/k8s-ansible/playbooks/templates/haproxy.cfg.j2
+        src: kubernetestes/k8s-ansible/playbooks/templates/haproxy.cfg.j2
         dest: /etc/haproxy/haproxy.cfg
         mode: '0644'
         backup: yes
@@ -26,7 +26,7 @@
 
     - name: Configure Keepalived
       template:
-        src: home/dev/kubernetestes/k8s-ansible/playbooks/templates/keepalived.conf.j2
+        src: kubernetestes/k8s-ansible/playbooks/templates/keepalived.conf.j2
         dest: /etc/keepalived/keepalived.conf
         mode: '0644'
         backup: yes
