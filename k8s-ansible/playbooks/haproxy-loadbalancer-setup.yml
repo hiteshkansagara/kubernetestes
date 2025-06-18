@@ -16,7 +16,7 @@
         mode: '0644'
         backup: yes
       vars:
-        master_nodes: "{{ groups['masters'] }}"
+        master_nodes: "{{ groups['master'] }}"
       notify:
         - Restart HAProxy
 
