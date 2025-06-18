@@ -2,7 +2,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-
+  become: true
   vars:
     argocd_namespace: argocd
     nodeport_http: 30080
