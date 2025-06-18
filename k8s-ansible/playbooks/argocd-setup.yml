@@ -103,7 +103,7 @@
 
     - name: Set expected_count dynamically (as integer)
       set_fact:
-        expected_count: "{{ argocd_pods_all.resources | length | int }}"
+        expected_count: "{{ argocd_pods_all.resources | length }}"
 
     - name: Wait until all Argo CD pods are Running
       kubernetes.core.k8s_info:
@@ -113,8 +113,8 @@
       retries: 50
       delay: 5
       until: >
-        (argocd_pods.resources | default([]) | selectattr('status.phase', 'equalto', 'Running') | list | length) >= expected_count
-
+        (argocd_pods.resources | default([]) | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (expected_count | int)
+    
     - name: Fallback pause in case Argo CD not fully ready (optional but safe)
       ansible.builtin.pause:
         seconds: 60
