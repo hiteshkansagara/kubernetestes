@@ -103,8 +103,7 @@
           - app.kubernetes.io/part-of=argocd
       register: argocd_pods
       until: >
-        argocd_pods.resources is defined and
-        (argocd_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (replicas * 3)
+        (argocd_pods.resources | default([]) | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (replicas * 3)
       retries: 50
       delay: 5
 
