@@ -1,0 +1,92 @@
+- name: Deploy HA Argo CD on Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    argocd_namespace: argocd
+    nodeport_http: 30080
+    nodeport_https: 30443
+    argo_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    replicas: 3  # customize based on your control plane count
+
+  tasks:
+
+    - name: Create Argo CD namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ argocd_namespace }}"
+        state: present
+
+    - name: Apply Argo CD manifests (base setup)
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ argo_manifest_url }}"
+        namespace: "{{ argocd_namespace }}"
+
+    - name: Patch deployments for HA (API server, controller, repo server)
+      kubernetes.core.k8s:
+        kind: Deployment
+        namespace: "{{ argocd_namespace }}"
+        name: "{{ item }}"
+        definition:
+          spec:
+            replicas: "{{ replicas }}"
+      loop:
+        - argocd-server
+        - argocd-repo-server
+        - argocd-application-controller
+
+    - name: Wait for Argo CD pods to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ argocd_namespace }}"
+      register: argocd_pods
+      until: >
+        argocd_pods.resources
+        | selectattr('status.phase', 'equalto', 'Running')
+        | list
+        | length >= (replicas * 3) - 1
+      retries: 30
+      delay: 10
+
+    - name: Expose Argo CD server via NodePort
+      kubernetes.core.k8s:
+        namespace: "{{ argocd_namespace }}"
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: argocd-server-nodeport
+            labels:
+              app: argocd-server
+          spec:
+            type: NodePort
+            ports:
+              - name: http
+                port: 80
+                targetPort: 8080
+                nodePort: "{{ nodeport_http }}"
+              - name: https
+                port: 443
+                targetPort: 8080
+                nodePort: "{{ nodeport_https }}"
+            selector:
+              app.kubernetes.io/name: argocd-server
+              app.kubernetes.io/part-of: argocd
+
+    - name: Get Argo CD admin password
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: "{{ argocd_namespace }}"
+        name: argocd-initial-admin-secret
+      register: admin_secret
+
+    - name: Output Argo CD info
+      debug:
+        msg: |
+          ✅ Argo CD is deployed in HA mode.
+          Access it at: https://<NODE-IP>:{{ nodeport_https }}
+          Username: admin
+          Password: {{ admin_secret.resources[0].data.password | b64decode }}
