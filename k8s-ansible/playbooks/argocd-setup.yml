@@ -62,22 +62,22 @@
       register: apply_result
       changed_when: "'configured' in apply_result.stdout or 'created' in apply_result.stdout"
 
-    - name: Wait for each Argo CD deployment to appear
+    - name: Wait for each Argo CD resource to appear
       kubernetes.core.k8s_info:
         api_version: apps/v1
-        kind: Deployment
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
         namespace: "{{ argocd_namespace }}"
-        name: "{{ item }}"
-      register: deployments
+      register: k8s_resource
+      until: k8s_resource.resources | length > 0
       retries: 50
       delay: 6
-      until: deployments.resources | length > 0
       loop:
-        - argocd-server
-        - argocd-repo-server
-        - argocd-application-controller
+        - { name: argocd-server, kind: Deployment }
+        - { name: argocd-repo-server, kind: Deployment }
+        - { name: argocd-application-controller, kind: StatefulSet }
       loop_control:
-        label: "{{ item }}"
+        label: "{{ item.name }}"
 
     - name: Patch Argo CD replicas for HA
       kubernetes.core.k8s:
