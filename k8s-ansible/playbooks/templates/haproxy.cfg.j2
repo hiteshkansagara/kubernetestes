@@ -24,7 +24,7 @@ backend kubernetes-backend
 
 frontend argocd-frontend
     bind *:{{ haproxy_bind_port_argocd }}
-    default_backend kubernetes-backend
+    default_backend argocd-backend
 
 backend argocd-backend
     balance roundrobin

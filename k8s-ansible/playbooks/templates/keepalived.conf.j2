@@ -31,7 +31,7 @@ vrrp_script chk_haproxy_argocd {
 vrrp_instance VI_2 {
     state {{ 'MASTER' if inventory_hostname == groups['master'][0] else 'BACKUP' }}
     interface {{ ansible_default_ipv4.interface }}
-    virtual_router_id 51
+    virtual_router_id 52
     priority {{ 101 if inventory_hostname == groups['master'][0] else 100 }}
     advert_int 1
     authentication {
