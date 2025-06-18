@@ -17,11 +17,12 @@
         state: present
       become: true
 
-    - name: Ensure kubernetes Python module is installed
-      ansible.builtin.pip:
-        name: kubernetes
-        executable: pip3
-        
+    - name: Ensure Python Kubernetes client is installed via apt
+      ansible.builtin.apt:
+        name: python3-kubernetes
+        state: present
+      become: true
+
     - name: Create Argo CD namespace
       kubernetes.core.k8s:
         api_version: v1
