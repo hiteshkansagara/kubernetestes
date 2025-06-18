@@ -44,7 +44,7 @@
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
       register: deployments
-      retries: 20
+      retries: 10
       delay: 6
       until: deployments.resources | length > 0
       loop:
@@ -78,7 +78,7 @@
       until: >
         argocd_pods.resources is defined and
         (argocd_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (replicas * 3)
-      retries: 40
+      retries: 10
       delay: 5
 
     - name: Fallback pause in case Argo CD not fully ready (optional but safe)
