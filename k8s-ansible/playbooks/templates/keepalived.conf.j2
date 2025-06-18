@@ -1,16 +1,23 @@
+vrrp_script chk_haproxy {
+    script "/usr/bin/pgrep haproxy"
+    interval 2
+    weight -20
+}
+
 vrrp_instance VI_1 {
     state {{ 'MASTER' if inventory_hostname == groups['master'][0] else 'BACKUP' }}
     interface {{ ansible_default_ipv4.interface }}
     virtual_router_id 51
     priority {{ 101 if inventory_hostname == groups['master'][0] else 100 }}
     advert_int 1
-
     authentication {
         auth_type PASS
         auth_pass 1234
     }
-
     virtual_ipaddress {
         {{ vip_address }}
+    }
+    track_script {
+        chk_haproxy
     }
 }
