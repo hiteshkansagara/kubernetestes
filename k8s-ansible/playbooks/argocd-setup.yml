@@ -3,25 +3,24 @@
   connection: local
   gather_facts: false
   become: true
-
   vars:
     argocd_namespace: argocd
-    kubeconfig_path: /root/.kube/config
-    replicas: 3  # Adjust for your HA control-plane setup
     nodeport_http: 30080
     nodeport_https: 30443
     ha_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml
-
+    replicas: 3
+    kubeconfig_path: /root/.kube/config
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
 
   tasks:
+
     - name: Ensure python3-pip is installed
       ansible.builtin.apt:
         name: python3-pip
         state: present
 
-    - name: Ensure Python Kubernetes client is installed
+    - name: Ensure Kubernetes Python client is installed via apt
       ansible.builtin.apt:
         name: python3-kubernetes
         state: present
@@ -33,45 +32,51 @@
         name: "{{ argocd_namespace }}"
         state: present
 
-    - name: Apply Argo CD HA install manifest
+    - name: Apply HA Argo CD manifests
       ansible.builtin.command:
-        cmd: kubectl apply -n {{ argocd_namespace }} -f {{ ha_manifest_url }}
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
+        cmd: kubectl apply -n "{{ argocd_namespace }}" -f "{{ ha_manifest_url }}"
+      register: apply_result
+      changed_when: "'configured' in apply_result.stdout or 'created' in apply_result.stdout"
 
-    - name: Wait until Argo CD controller deployment is created
+    - name: Wait for deployments to appear
       kubernetes.core.k8s_info:
+        api_version: apps/v1
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
-        name: argocd-application-controller
-      register: controller_deployment
-      retries: 40
+      register: deployments
+      retries: 20
       delay: 6
-      until: controller_deployment.resources | length > 0
+      until: deployments.resources | length > 0
 
-    - name: Patch deployments for custom replica count
-      kubernetes.core.k8s_json_patch:
+    - name: Patch Argo CD replicas for HA
+      kubernetes.core.k8s:
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
         name: "{{ item }}"
-        patch:
-          - op: replace
-            path: /spec/replicas
-            value: "{{ replicas }}"
+        definition:
+          spec:
+            replicas: "{{ replicas }}"
       loop:
-        - argocd-server
-        - argocd-repo-server
         - argocd-application-controller
+        - argocd-repo-server
+        - argocd-server
 
-    - name: Wait for Argo CD pods to be ready
+    - name: Wait for Argo CD pods to be Running (dynamic check)
       kubernetes.core.k8s_info:
         kind: Pod
         namespace: "{{ argocd_namespace }}"
+        label_selectors:
+          - app.kubernetes.io/part-of=argocd
       register: argocd_pods
       until: >
-        argocd_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length >= (replicas * 3)
-      retries: 30
-      delay: 10
+        argocd_pods.resources is defined and
+        (argocd_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (replicas * 3)
+      retries: 40
+      delay: 5
+
+    - name: Fallback pause in case Argo CD not fully ready (optional but safe)
+      ansible.builtin.pause:
+        seconds: 60
 
     - name: Expose Argo CD server via NodePort
       kubernetes.core.k8s:
@@ -108,7 +113,7 @@
     - name: Output Argo CD access info
       debug:
         msg: |
-          ✅ Argo CD is deployed in HA mode.
-          🌐 Access: https://<NODE-IP>:{{ nodeport_https }}
+          ✅ Argo CD (HA) is deployed successfully!
+          🔗 Access URL: https://<ANY-NODE-IP>:{{ nodeport_https }}
           👤 Username: admin
-          🔐 Password: {{ admin_secret.resources[0].data.password | b64decode }}
+          🔑 Password: {{ admin_secret.resources[0].data.password | b64decode }}
