@@ -19,6 +19,6 @@ frontend kubernetes
 backend kubernetes-masters
     balance roundrobin
     option tcp-check
-{% for host in groups['masters'] %}
+{% for host in master_nodes %}
     server {{ host }} {{ hostvars[host]['ansible_host'] }}:6443 check
 {% endfor %}
