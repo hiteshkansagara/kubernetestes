@@ -79,21 +79,21 @@
       loop_control:
         label: "{{ item.name }}"
 
-    - name: Patch Argo CD replicas for HA
+    - name: Patch Argo CD components for HA
       kubernetes.core.k8s:
-        kind: Deployment
         namespace: "{{ argocd_namespace }}"
-        name: "{{ item }}"
+        name: "{{ item.name }}"
+        kind: "{{ item.kind }}"
+        merge_type: strategic-merge
         resource_definition:
           spec:
             replicas: "{{ replicas }}"
-        merge_type:
-          - strategic-merge
       loop:
-        - argocd-application-controller
-        - argocd-repo-server
-        - argocd-server
-      ignore_errors: true  # Optional if there's a chance a deployment doesn't exist yet
+        - { name: argocd-server, kind: Deployment }
+        - { name: argocd-repo-server, kind: Deployment }
+        - { name: argocd-application-controller, kind: StatefulSet }
+      loop_control:
+        label: "{{ item.name }}"
 
     - name: Wait for Argo CD pods to be Running (dynamic check)
       kubernetes.core.k8s_info:
