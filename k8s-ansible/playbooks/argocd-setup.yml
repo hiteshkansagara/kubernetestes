@@ -62,11 +62,12 @@
       register: apply_result
       changed_when: "'configured' in apply_result.stdout or 'created' in apply_result.stdout"
 
-    - name: Wait for deployments to appear
+    - name: Wait for each Argo CD deployment to appear
       kubernetes.core.k8s_info:
         api_version: apps/v1
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
+        name: "{{ item }}"
       register: deployments
       retries: 10
       delay: 6
@@ -75,6 +76,8 @@
         - argocd-server
         - argocd-repo-server
         - argocd-application-controller
+      loop_control:
+        label: "{{ item }}"
 
     - name: Patch Argo CD replicas for HA
       kubernetes.core.k8s:
