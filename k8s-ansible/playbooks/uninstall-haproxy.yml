@@ -1,5 +1,5 @@
 - name: Full Uninstall of HAProxy, Keepalived, VIP, and Port Check
-  hosts: haproxy_nodes
+  hosts: haproxy_master
   become: true
   vars:
     vip_address: "192.168.41.99"
