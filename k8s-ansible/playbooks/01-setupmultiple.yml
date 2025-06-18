@@ -338,16 +338,33 @@
   become: yes
   gather_facts: false
   tasks:
-    - name: Enable and start kubelet service
-      ansible.builtin.service:
+    - name: Generate kubeadm join command
+      shell: kubeadm token create --ttl 1h --print-join-command
+      register: join_command_output
+      delegate_to: master1
+      run_once: true
+
+    - name: Set kubeadm join command as a fact
+      set_fact:
+        kube_join_cmd: "{{ join_command_output.stdout }}"
+
+    - name: Check if node is already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: kubelet_conf_check
+      when: "'worker' in inventory_hostname"
+
+    - name: Ensure kubelet is enabled and running
+      service:
         name: kubelet
         state: started
         enabled: yes
-    - name: Get join command from primary master
-      set_fact:
-        join_cmd: "{{ hostvars['JOIN_INFO']['join_command'].split('--control-plane')[0] | trim }}"
+      when: "'worker' in inventory_hostname"
 
-    - name: Join worker node to the cluster
-      shell: "{{ join_cmd }}"
+    - name: Join worker nodes to the cluster
+      shell: "{{ kube_join_cmd }}"
       args:
-        creates: /etc/kubernetes/kubelet.conf
+        executable: /bin/bash
+      when:
+        - "'worker' in inventory_hostname"
+        - not kubelet_conf_check.stat.exists
