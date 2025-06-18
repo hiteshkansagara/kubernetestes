@@ -57,7 +57,7 @@
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
         name: "{{ item }}"
-        definition:
+        resource_definition:
           spec:
             replicas: "{{ replicas }}"
         merge_type:
