@@ -15,6 +15,34 @@
 
   tasks:
 
+    - name: Delete all resources in Argo CD namespace
+      ansible.builtin.shell: |
+        kubectl delete all --all -n argocd
+      args:
+        warn: false
+
+    - name: Delete configmaps, secrets, and other non-core resources in Argo CD namespace
+      ansible.builtin.shell: |
+        kubectl delete cm,secrets,svcaccount,role,rolebinding,networkpolicy --all -n argocd || true
+      args:
+        warn: false
+
+    - name: Delete Argo CD namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: argocd
+        state: absent
+
+    - name: Wait for Argo CD namespace to terminate
+      kubernetes.core.k8s_info:
+        kind: Namespace
+        name: argocd
+      register: ns_status
+      retries: 20
+      delay: 5
+      until: ns_status.resources | length == 0
+
     - name: Ensure python3-pip is installed
       ansible.builtin.apt:
         name: python3-pip
