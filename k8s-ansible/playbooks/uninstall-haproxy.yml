@@ -1,0 +1,84 @@
+- name: Full Uninstall of HAProxy, Keepalived, VIP, and Port Check
+  hosts: haproxy_nodes
+  become: true
+  vars:
+    vip_address: "192.168.41.99"
+
+  tasks:
+
+    - name: Stop and disable HAProxy service
+      ansible.builtin.systemd:
+        name: haproxy
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Stop and disable Keepalived service
+      ansible.builtin.systemd:
+        name: keepalived
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Remove HAProxy and Keepalived packages
+      ansible.builtin.apt:
+        name:
+          - haproxy
+          - keepalived
+        state: absent
+        purge: true
+        autoremove: true
+        update_cache: true
+
+    - name: Remove HAProxy config directory
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: absent
+
+    - name: Remove HAProxy data directory
+      ansible.builtin.file:
+        path: /var/lib/haproxy
+        state: absent
+
+    - name: Remove Keepalived config directory
+      ansible.builtin.file:
+        path: /etc/keepalived
+        state: absent
+
+    - name: Remove custom HAProxy systemd file (if any)
+      ansible.builtin.file:
+        path: /etc/systemd/system/haproxy.service
+        state: absent
+      ignore_errors: true
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Remove VIP if present on any interface
+      ansible.builtin.shell: |
+        ip addr | grep "{{ vip_address }}"
+        if [ $? -eq 0 ]; then
+          ip addr del {{ vip_address }}/32 dev $(ip route get {{ vip_address }} | awk '{print $5}')
+        fi
+      args:
+        warn: false
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check if port 8443 is still in use
+      ansible.builtin.shell: |
+        ss -tuln | grep ':8443'
+      register: haproxy_port_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Show result if port 8443 is still open
+      ansible.builtin.debug:
+        msg: "Port 8443 is still in use: {{ haproxy_port_check.stdout_lines }}"
+      when: haproxy_port_check.stdout_lines | length > 0
+
+    - name: Confirm port 8443 is free
+      ansible.builtin.debug:
+        msg: "✅ Port 8443 is not in use."
+      when: haproxy_port_check.stdout_lines | length == 0

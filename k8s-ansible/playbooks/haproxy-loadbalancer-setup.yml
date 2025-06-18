@@ -1,33 +1,54 @@
-- name: Install and configure HAProxy on master1
+- name: Install HAProxy and Keepalived on Master Nodes
   hosts: haproxy_master
   become: yes
+  vars:
+    vip_address: "{{ hostvars['localhost']['vip_address'] }}"
+    haproxy_bind_port: "{{ hostvars['localhost']['haproxy_bind_port'] }}"
   tasks:
 
-    - name: Install HAProxy
+    - name: Install HAProxy and Keepalived
       apt:
-        name: haproxy
+        name: "{{ item }}"
         state: present
         update_cache: yes
+      loop:
+        - haproxy
+        - keepalived
 
-    - name: Configure HAProxy for Kubernetes API
+    - name: Configure HAProxy
       template:
-        src: /home/dev/kubernetestes/k8s-ansible/playbooks/templates/haproxy.cfg.j2
+        src: home/dev/kubernetestes/k8s-ansible/playbooks/templates/haproxy.cfg.j2
         dest: /etc/haproxy/haproxy.cfg
         mode: '0644'
         backup: yes
-      vars:
-        master_nodes: "{{ groups['master'] }}"
       notify:
         - Restart HAProxy
 
-    - name: Enable and start HAProxy
+    - name: Configure Keepalived
+      template:
+        src: home/dev/kubernetestes/k8s-ansible/playbooks/templates/keepalived.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+        mode: '0644'
+        backup: yes
+      notify:
+        - Restart Keepalived
+
+    - name: Enable and start HAProxy and Keepalived
       systemd:
-        name: haproxy
+        name: "{{ item }}"
         enabled: yes
         state: started
+      loop:
+        - haproxy
+        - keepalived
 
   handlers:
     - name: Restart HAProxy
       systemd:
         name: haproxy
+        state: restarted
+
+    - name: Restart Keepalived
+      systemd:
+        name: keepalived
         state: restarted

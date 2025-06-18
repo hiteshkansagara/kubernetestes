@@ -277,7 +277,7 @@
     - name: Initialize Kubernetes control-plane
       shell: |
         kubeadm init \
-          --control-plane-endpoint "192.168.41.112:8443" \
+          --control-plane-endpoint "{{vip_address}}:{{haproxy_bind_port}}" \
           --upload-certs \
           --pod-network-cidr=10.244.0.0/16
       args:
