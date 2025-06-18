@@ -101,9 +101,9 @@
         namespace: "{{ argocd_namespace }}"
       register: argocd_pods_all
 
-    - name: Set expected_count dynamically
+    - name: Set expected_count dynamically (as integer)
       set_fact:
-        expected_count: "{{ argocd_pods_all.resources | length }}"
+        expected_count: "{{ argocd_pods_all.resources | length | int }}"
 
     - name: Wait until all Argo CD pods are Running
       kubernetes.core.k8s_info:
