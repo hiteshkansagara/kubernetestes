@@ -95,17 +95,25 @@
       loop_control:
         label: "{{ item.name }}"
 
-    - name: Wait for Argo CD pods to be Running (dynamic check)
+    - name: Get all Argo CD pods
       kubernetes.core.k8s_info:
         kind: Pod
         namespace: "{{ argocd_namespace }}"
-        label_selectors:
-          - app.kubernetes.io/part-of=argocd
+      register: argocd_pods_all
+
+    - name: Set expected_count dynamically
+      set_fact:
+        expected_count: "{{ argocd_pods_all.resources | length }}"
+
+    - name: Wait until all Argo CD pods are Running
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ argocd_namespace }}"
       register: argocd_pods
-      until: >
-        (argocd_pods.resources | default([]) | selectattr('status.phase', 'equalto', 'Running') | list | length) >= (replicas * 3)
       retries: 50
       delay: 5
+      until: >
+        (argocd_pods.resources | default([]) | selectattr('status.phase', 'equalto', 'Running') | list | length) >= expected_count
 
     - name: Fallback pause in case Argo CD not fully ready (optional but safe)
       ansible.builtin.pause:
