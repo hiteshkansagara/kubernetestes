@@ -11,10 +11,17 @@
     replicas: 3  # customize based on your control plane count
 
   tasks:
-    - name: Install required Python packages for Kubernetes modules
+    - name: Ensure python3-pip is installed
+      ansible.builtin.apt:
+        name: python3-pip
+        state: present
+      become: true
+
+    - name: Ensure kubernetes Python module is installed
       ansible.builtin.pip:
         name: kubernetes
         executable: pip3
+        
     - name: Create Argo CD namespace
       kubernetes.core.k8s:
         api_version: v1
