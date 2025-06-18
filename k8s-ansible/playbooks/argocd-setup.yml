@@ -56,10 +56,13 @@
         definition:
           spec:
             replicas: "{{ replicas }}"
+        merge_type:
+          - merge
       loop:
         - argocd-application-controller
         - argocd-repo-server
         - argocd-server
+      ignore_errors: true  # Optional if there's a chance a deployment doesn't exist yet
 
     - name: Wait for Argo CD pods to be Running (dynamic check)
       kubernetes.core.k8s_info:
