@@ -18,14 +18,10 @@
     - name: Delete all resources in Argo CD namespace
       ansible.builtin.shell: |
         kubectl delete all --all -n argocd
-      args:
-        warn: false
 
     - name: Delete configmaps, secrets, and other non-core resources in Argo CD namespace
       ansible.builtin.shell: |
         kubectl delete cm,secrets,svcaccount,role,rolebinding,networkpolicy --all -n argocd || true
-      args:
-        warn: false
 
     - name: Delete Argo CD namespace
       kubernetes.core.k8s:
