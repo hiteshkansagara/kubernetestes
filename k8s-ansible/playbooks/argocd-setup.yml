@@ -8,20 +8,21 @@
     nodeport_http: 30080
     nodeport_https: 30443
     argo_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    redis_ha_manifest_url: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/redis-ha.yaml
     replicas: 3  # customize based on your control plane count
-
+    kubeconfig_path: /root/.kube/config
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
   tasks:
     - name: Ensure python3-pip is installed
       ansible.builtin.apt:
         name: python3-pip
         state: present
-      become: true
 
     - name: Ensure Python Kubernetes client is installed via apt
       ansible.builtin.apt:
         name: python3-kubernetes
         state: present
-      become: true
 
     - name: Create Argo CD namespace
       kubernetes.core.k8s:
@@ -31,34 +32,45 @@
         state: present
 
     - name: Apply Argo CD manifests (base setup)
-      kubernetes.core.k8s:
-        state: present
-        src: "{{ argo_manifest_url }}"
-        namespace: "{{ argocd_namespace }}"
+      ansible.builtin.command:
+        cmd: kubectl apply -n {{ argocd_namespace }} -f {{ argo_manifest_url }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
 
-    - name: Patch deployments for HA (API server, controller, repo server)
+    - name: Remove default Redis deployment
       kubernetes.core.k8s:
         kind: Deployment
         namespace: "{{ argocd_namespace }}"
+        name: argocd-redis
+        state: absent
+
+    - name: Deploy Redis HA components
+      ansible.builtin.command:
+        cmd: kubectl apply -n {{ argocd_namespace }} -f {{ redis_ha_manifest_url }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Patch deployments for HA (API server, controller, repo server)
+      kubernetes.core.k8s_json_patch:
+        kind: Deployment
+        namespace: "{{ argocd_namespace }}"
         name: "{{ item }}"
-        definition:
-          spec:
-            replicas: "{{ replicas }}"
+        patch:
+          - op: replace
+            path: /spec/replicas
+            value: "{{ replicas }}"
       loop:
         - argocd-server
         - argocd-repo-server
         - argocd-application-controller
 
-    - name: Wait for Argo CD pods to be ready
+    - name: Wait for all Argo CD pods to be running
       kubernetes.core.k8s_info:
         kind: Pod
         namespace: "{{ argocd_namespace }}"
       register: argocd_pods
       until: >
-        argocd_pods.resources
-        | selectattr('status.phase', 'equalto', 'Running')
-        | list
-        | length >= (replicas * 3) - 1
+        argocd_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length >= (replicas * 3)
       retries: 30
       delay: 10
 
