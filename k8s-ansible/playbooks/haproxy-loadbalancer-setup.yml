@@ -11,7 +11,7 @@
 
     - name: Configure HAProxy for Kubernetes API
       template:
-        src: haproxy.cfg.j2
+        src: /home/dev/kubernetestes/k8s-ansible/playbooks/templates/haproxy.cfg.j2
         dest: /etc/haproxy/haproxy.cfg
         mode: '0644'
         backup: yes
