@@ -155,9 +155,9 @@
         name: "{{ rabbitmq_namespace }}"
         state: present
 
-    - name: Write RabbitMQ values file
+    - name: Write RabbitMQ values file to user's home
       ansible.builtin.copy:
-        dest: /tmp/rabbitmq-values.yaml
+        dest: "{{ ansible_env.HOME }}/rabbitmq-values.yaml"
         content: "{{ rabbitmq_values }}"
 
     - name: Install RabbitMQ via Helm
@@ -165,4 +165,4 @@
         helm upgrade --install {{ rabbitmq_release_name }} {{ rabbitmq_chart }}
         --namespace {{ rabbitmq_namespace }}
         --version {{ rabbitmq_chart_version }}
-        -f /tmp/rabbitmq-values.yaml
+        -f {{ ansible_env.HOME }}/rabbitmq-values.yaml
