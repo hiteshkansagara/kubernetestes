@@ -162,7 +162,7 @@
 
     - name: Uninstall RabbitMQ release (if reinstall is true)
       ansible.builtin.command: helm uninstall {{ rabbitmq_release_name }} -n {{ rabbitmq_namespace }}
-      when: reinstall_rabbitmq
+      when: reinstall_rabbitmq | default(false)
       ignore_errors: true
 
     - name: Delete RabbitMQ PVCs (if reinstall is true)
@@ -172,7 +172,7 @@
         namespace: "{{ rabbitmq_namespace }}"
         label_selectors:
           - "app.kubernetes.io/name=rabbitmq"
-      when: reinstall_rabbitmq
+      when: reinstall_rabbitmq | default(false)
       ignore_errors: true
 
     - name: Install RabbitMQ via Helm
