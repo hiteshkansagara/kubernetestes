@@ -1,25 +1,50 @@
 - name: Install open-iscsi on all Kubernetes nodes
   hosts: all
   become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for APT/dpkg lock to be released on Debian/Ubuntu
+      ansible.builtin.shell: |
+        while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+              fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo "Waiting for other apt/dpkg processes to finish..."
+          sleep 10
+        done
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
   tasks:
-    - name: Install open-iscsi (Ubuntu/Debian)
+    - name: Install open-iscsi on Debian/Ubuntu
       ansible.builtin.apt:
         name: open-iscsi
         state: present
         update_cache: yes
       when: ansible_facts['os_family'] == 'Debian'
+      retries: 5
+      delay: 10
+      register: iscsi_install_result
+      until: iscsi_install_result is success
 
-    - name: Install iscsi-initiator-utils (CentOS/RHEL)
+    - name: Install iscsi-initiator-utils on RHEL/CentOS
       ansible.builtin.yum:
         name: iscsi-initiator-utils
         state: present
       when: ansible_facts['os_family'] == 'RedHat'
 
-    - name: Enable and start iscsid service
+    - name: Enable and start iscsid service on Debian/Ubuntu
       ansible.builtin.service:
         name: iscsid
         state: started
         enabled: yes
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Enable and start iscsid service on RHEL/CentOS
+      ansible.builtin.service:
+        name: iscsid
+        state: started
+        enabled: yes
+      when: ansible_facts['os_family'] == 'RedHat'
 
 #####################################################################
 - name: Install Longhorn CSI Provisioner (Rancher) with Helm
