@@ -21,13 +21,3 @@ backend kubernetes-backend
 {% for host in groups['master'] %}
     server {{ host }} {{ hostvars[host]['ansible_host'] }}:6443 check
 {% endfor %}
-
-frontend argocd-frontend
-    bind *:{{ haproxy_bind_port_argocd }}
-    default_backend argocd-backend
-
-backend argocd-backend
-    balance roundrobin
-{% for host in groups['master'] %}
-    server {{ host }} {{ hostvars[host]['ansible_host'] }}:{{ haproxy_bind_port_argocd }} check
-{% endfor %}
