@@ -1,0 +1,81 @@
+- name: Install RabbitMQ in Kubernetes using Helm
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    rabbitmq_namespace: rabbitmq
+    rabbitmq_release_name: rabbitmq
+    rabbitmq_helm_chart: bitnami/rabbitmq
+    rabbitmq_chart_version: 12.0.5
+    helm_version: "v3.14.4"
+    helm_binary_path: "/usr/local/bin/helm"
+
+    rabbitmq_values: |
+      auth:
+        username: admin
+        password: adminpassword
+        erlangCookie: secretcookie
+
+      service:
+        type: ClusterIP
+
+      persistence:
+        enabled: true
+        size: 8Gi
+
+  tasks:
+    - name: Check if Helm is already installed
+      ansible.builtin.stat:
+        path: "{{ helm_binary_path }}"
+      register: helm_stat
+
+    - name: Download Helm binary
+      when: not helm_stat.stat.exists
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm.tar.gz"
+        mode: '0644'
+
+    - name: Extract Helm binary
+      when: not helm_stat.stat.exists
+      ansible.builtin.unarchive:
+        src: "/tmp/helm.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Move Helm binary to /usr/local/bin
+      when: not helm_stat.stat.exists
+      ansible.builtin.copy:
+        src: "/tmp/linux-amd64/helm"
+        dest: "{{ helm_binary_path }}"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create RabbitMQ namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ rabbitmq_namespace }}"
+        state: present
+
+    - name: Add Bitnami Helm repo
+      ansible.builtin.command: helm repo add bitnami https://charts.bitnami.com/bitnami
+      register: helm_repo_add
+      changed_when: "'has been added' in helm_repo_add.stdout or 'already exists' not in helm_repo_add.stderr"
+
+    - name: Update Helm repos
+      ansible.builtin.command: helm repo update
+
+    - name: Write values.yaml for RabbitMQ
+      ansible.builtin.copy:
+        dest: /tmp/rabbitmq-values.yaml
+        content: "{{ rabbitmq_values }}"
+
+    - name: Install or upgrade RabbitMQ Helm release
+      ansible.builtin.command: >
+        helm upgrade --install {{ rabbitmq_release_name }}
+        {{ rabbitmq_helm_chart }}
+        --namespace {{ rabbitmq_namespace }}
+        --version {{ rabbitmq_chart_version }}
+        -f /tmp/rabbitmq-values.yaml
