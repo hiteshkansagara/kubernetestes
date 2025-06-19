@@ -160,6 +160,21 @@
         dest: "{{ ansible_env.HOME }}/rabbitmq-values.yaml"
         content: "{{ rabbitmq_values }}"
 
+    - name: Uninstall RabbitMQ release (if reinstall is true)
+      ansible.builtin.command: helm uninstall {{ rabbitmq_release_name }} -n {{ rabbitmq_namespace }}
+      when: reinstall_rabbitmq
+      ignore_errors: true
+
+    - name: Delete RabbitMQ PVCs (if reinstall is true)
+      kubernetes.core.k8s:
+        state: absent
+        kind: PersistentVolumeClaim
+        namespace: "{{ rabbitmq_namespace }}"
+        label_selectors:
+          - "app.kubernetes.io/name=rabbitmq"
+      when: reinstall_rabbitmq
+      ignore_errors: true
+
     - name: Install RabbitMQ via Helm
       ansible.builtin.command: >
         helm upgrade --install {{ rabbitmq_release_name }} {{ rabbitmq_chart }}
