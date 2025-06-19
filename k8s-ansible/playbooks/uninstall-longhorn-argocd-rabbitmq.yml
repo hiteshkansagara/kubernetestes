@@ -1,0 +1,79 @@
+- name: Uninstall Longhorn, Argo CD, and RabbitMQ from Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  become: true
+  vars:
+    # Longhorn
+    longhorn_namespace: longhorn-system
+    longhorn_release_name: longhorn
+
+    # Argo CD
+    argocd_namespace: argocd
+
+    # RabbitMQ
+    rabbitmq_namespace: rabbitmq
+    rabbitmq_release_name: rabbitmq
+
+  tasks:
+    ## --- Longhorn Removal ---
+    - name: Uninstall Longhorn via Helm
+      shell: |
+        helm uninstall {{ longhorn_release_name }} -n {{ longhorn_namespace }} || true
+      ignore_errors: yes
+
+    - name: Delete Longhorn namespace
+      shell: |
+        kubectl delete ns {{ longhorn_namespace }} --ignore-not-found
+      ignore_errors: yes
+
+    - name: Wait for Longhorn namespace deletion
+      shell: |
+        while kubectl get ns {{ longhorn_namespace }} >/dev/null 2>&1; do
+          echo "Waiting for {{ longhorn_namespace }} namespace deletion..."
+          sleep 5
+        done
+      changed_when: false
+
+    - name: Delete Longhorn CRDs
+      shell: |
+        kubectl get crds | grep longhorn | awk '{print $1}' | xargs -r kubectl delete crd || true
+      ignore_errors: yes
+
+    ## --- Argo CD Removal ---
+    - name: Delete Argo CD namespace
+      shell: |
+        kubectl delete ns {{ argocd_namespace }} --ignore-not-found
+      ignore_errors: yes
+
+    - name: Wait for Argo CD namespace deletion
+      shell: |
+        while kubectl get ns {{ argocd_namespace }} >/dev/null 2>&1; do
+          echo "Waiting for {{ argocd_namespace }} namespace deletion..."
+          sleep 5
+        done
+      changed_when: false
+
+    - name: Delete Argo CD CRDs
+      shell: |
+        kubectl get crds | grep argoproj | awk '{print $1}' | xargs -r kubectl delete crd || true
+      ignore_errors: yes
+
+    ## --- RabbitMQ Removal ---
+    - name: Uninstall RabbitMQ via Helm
+      shell: |
+        helm uninstall {{ rabbitmq_release_name }} -n {{ rabbitmq_namespace }} || true
+      ignore_errors: yes
+
+    - name: Delete RabbitMQ namespace
+      shell: |
+        kubectl delete ns {{ rabbitmq_namespace }} --ignore-not-found
+      ignore_errors: yes
+
+    - name: Wait for RabbitMQ namespace deletion
+      shell: |
+        while kubectl get ns {{ rabbitmq_namespace }} >/dev/null 2>&1; do
+          echo "Waiting for {{ rabbitmq_namespace }} namespace deletion..."
+          sleep 5
+        done
+      changed_when: false
