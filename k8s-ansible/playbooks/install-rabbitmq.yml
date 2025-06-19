@@ -48,7 +48,7 @@
   hosts: localhost
   connection: local
   gather_facts: true
-
+  become: true
   vars:
     helm_version: "v3.14.4"
     helm_binary_path: "/usr/local/bin/helm"
