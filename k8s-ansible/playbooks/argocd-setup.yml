@@ -143,6 +143,7 @@
             selector:
               app.kubernetes.io/name: argocd-server
               app.kubernetes.io/part-of: argocd
+              app.kubernetes.io/component: server
 
     - name: Get Argo CD admin password
       kubernetes.core.k8s_info:
