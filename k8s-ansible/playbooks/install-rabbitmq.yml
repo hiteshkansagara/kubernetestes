@@ -57,6 +57,7 @@
     rabbitmq_release_name: rabbitmq
     rabbitmq_chart: bitnami/rabbitmq
     rabbitmq_chart_version: 12.0.5
+    reinstall_rabbitmq: true
 
     longhorn_namespace: longhorn-system
     longhorn_chart_version: 1.6.1
