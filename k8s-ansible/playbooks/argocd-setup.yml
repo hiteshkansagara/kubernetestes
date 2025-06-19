@@ -119,31 +119,9 @@
       ansible.builtin.pause:
         seconds: 60
 
-    - name: Expose Argo CD server via NodePort
-      kubernetes.core.k8s:
-        namespace: "{{ argocd_namespace }}"
-        definition:
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: argocd-server-nodeport
-            labels:
-              app: argocd-server
-          spec:
-            type: NodePort
-            ports:
-              - name: http
-                port: 80
-                targetPort: 8080
-                nodePort: "{{ nodeport_http }}"
-              - name: https
-                port: 443
-                targetPort: 8080
-                nodePort: "{{ nodeport_https }}"
-            selector:
-              app.kubernetes.io/name: argocd-server
-              app.kubernetes.io/part-of: argocd
-              app.kubernetes.io/component: server
+    - name: Apply Argo CD service manifest using kubectl
+      ansible.builtin.command: >
+        kubectl apply -n {{ argocd_namespace }} -f ~/kubernetestes/k8s-ansible/playbooks/argocd-service.yml
 
     - name: Get Argo CD admin password
       kubernetes.core.k8s_info:
