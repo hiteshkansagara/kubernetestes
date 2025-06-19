@@ -1,28 +1,80 @@
-- name: Install RabbitMQ in Kubernetes using Helm
+- name: Longhorn CSI + RabbitMQ with NodePorts
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    helm_version: "v3.14.4"
+    helm_binary_path: "/usr/local/bin/helm"
+    rabbitmq_namespace: rabbitmq
+    longhorn_namespace: longhorn-system
+
+  pre_tasks:
+    - name: Wait for APT/dpkg lock to be released on Debian/Ubuntu
+      ansible.builtin.shell: |
+        while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+              fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+          echo "Waiting for apt/dpkg lock..."
+          sleep 10
+        done
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+  tasks:
+    - name: Install open-iscsi on Debian/Ubuntu
+      ansible.builtin.apt:
+        name: open-iscsi
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian'
+      retries: 5
+      delay: 10
+      register: iscsi_install_result
+      until: iscsi_install_result is success
+
+    - name: Install iscsi-initiator-utils on RHEL/CentOS
+      ansible.builtin.yum:
+        name: iscsi-initiator-utils
+        state: present
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Enable and start iscsid
+      ansible.builtin.service:
+        name: iscsid
+        state: started
+        enabled: yes
+
+- name: Install Helm, Longhorn, and RabbitMQ from control host
   hosts: localhost
   connection: local
   gather_facts: true
-  become: true
+
   vars:
-    rabbitmq_namespace: rabbitmq
-    rabbitmq_release_name: rabbitmq
-    rabbitmq_helm_chart: bitnami/rabbitmq
-    rabbitmq_chart_version: 12.0.5
     helm_version: "v3.14.4"
     helm_binary_path: "/usr/local/bin/helm"
+
+    rabbitmq_namespace: rabbitmq
+    rabbitmq_release_name: rabbitmq
+    rabbitmq_chart: bitnami/rabbitmq
+    rabbitmq_chart_version: 12.0.5
+
+    longhorn_namespace: longhorn-system
+    longhorn_chart_version: 1.6.1
 
     rabbitmq_values: |
       auth:
         username: admin
         password: adminpassword
         erlangCookie: secretcookie
-
       service:
-        type: ClusterIP
-
+        type: NodePort
+        nodePorts:
+          amqp: 30672
+          management: 31672
       persistence:
         enabled: true
         size: 8Gi
+        storageClass: longhorn
 
   tasks:
     - name: Check if Helm is already installed
@@ -41,16 +93,60 @@
       when: not helm_stat.stat.exists
       ansible.builtin.unarchive:
         src: "/tmp/helm.tar.gz"
-        dest: "/tmp"
+        dest: /tmp
         remote_src: yes
 
     - name: Move Helm binary to /usr/local/bin
       when: not helm_stat.stat.exists
       ansible.builtin.copy:
-        src: "/tmp/linux-amd64/helm"
+        src: /tmp/linux-amd64/helm
         dest: "{{ helm_binary_path }}"
         mode: '0755'
         remote_src: yes
+
+    - name: Add Longhorn Helm repo
+      ansible.builtin.command: helm repo add longhorn https://charts.longhorn.io
+      changed_when: false
+
+    - name: Add Bitnami Helm repo
+      ansible.builtin.command: helm repo add bitnami https://charts.bitnami.com/bitnami
+      changed_when: false
+
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update
+
+    - name: Create Longhorn namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ longhorn_namespace }}"
+        state: present
+
+    - name: Install Longhorn
+      ansible.builtin.command: >
+        helm upgrade --install longhorn longhorn/longhorn
+        --namespace {{ longhorn_namespace }}
+        --version {{ longhorn_chart_version }}
+        --set defaultSettings.defaultDataPath="/var/lib/longhorn"
+        --set service.ui.type=NodePort
+        --set service.ui.nodePort=30880
+        --create-namespace
+
+    - name: Wait for Longhorn manager pods to be ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ longhorn_namespace }}"
+        label_selectors:
+          - "app=longhorn-manager"
+      register: longhorn_pods
+
+    - name: Wait for longhorn-manager to be ready
+      ansible.builtin.wait_for:
+        timeout: 300
+        port: 30880
+        host: 127.0.0.1
+      when: longhorn_pods.resources | length > 0
 
     - name: Create RabbitMQ namespace
       kubernetes.core.k8s:
@@ -59,23 +155,14 @@
         name: "{{ rabbitmq_namespace }}"
         state: present
 
-    - name: Add Bitnami Helm repo
-      ansible.builtin.command: helm repo add bitnami https://charts.bitnami.com/bitnami
-      register: helm_repo_add
-      changed_when: "'has been added' in helm_repo_add.stdout or 'already exists' not in helm_repo_add.stderr"
-
-    - name: Update Helm repos
-      ansible.builtin.command: helm repo update
-
-    - name: Write values.yaml for RabbitMQ
+    - name: Write RabbitMQ values file
       ansible.builtin.copy:
         dest: /tmp/rabbitmq-values.yaml
         content: "{{ rabbitmq_values }}"
 
-    - name: Install or upgrade RabbitMQ Helm release
+    - name: Install RabbitMQ via Helm
       ansible.builtin.command: >
-        helm upgrade --install {{ rabbitmq_release_name }}
-        {{ rabbitmq_helm_chart }}
+        helm upgrade --install {{ rabbitmq_release_name }} {{ rabbitmq_chart }}
         --namespace {{ rabbitmq_namespace }}
         --version {{ rabbitmq_chart_version }}
         -f /tmp/rabbitmq-values.yaml
