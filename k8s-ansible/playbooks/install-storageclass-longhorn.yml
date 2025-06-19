@@ -1,3 +1,27 @@
+- name: Install open-iscsi on all Kubernetes nodes
+  hosts: all
+  become: true
+  tasks:
+    - name: Install open-iscsi (Ubuntu/Debian)
+      ansible.builtin.apt:
+        name: open-iscsi
+        state: present
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Install iscsi-initiator-utils (CentOS/RHEL)
+      ansible.builtin.yum:
+        name: iscsi-initiator-utils
+        state: present
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Enable and start iscsid service
+      ansible.builtin.service:
+        name: iscsid
+        state: started
+        enabled: yes
+
+#####################################################################
 - name: Install Longhorn CSI Provisioner (Rancher) with Helm
   hosts: localhost
   connection: local
