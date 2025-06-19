@@ -1,0 +1,64 @@
+- name: Install Longhorn CSI Provisioner (Rancher) with Helm
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    helm_version: "v3.14.4"
+    helm_binary_path: "/usr/local/bin/helm"
+
+    longhorn_namespace: longhorn-system
+    longhorn_repo_name: longhorn
+    longhorn_chart: longhorn/longhorn
+    longhorn_chart_version: 1.6.1
+
+  tasks:
+    - name: Check if Helm is already installed
+      ansible.builtin.stat:
+        path: "{{ helm_binary_path }}"
+      register: helm_stat
+
+    - name: Download Helm binary
+      when: not helm_stat.stat.exists
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm.tar.gz"
+        mode: '0644'
+
+    - name: Extract Helm binary
+      when: not helm_stat.stat.exists
+      ansible.builtin.unarchive:
+        src: "/tmp/helm.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Move Helm binary to /usr/local/bin
+      when: not helm_stat.stat.exists
+      ansible.builtin.copy:
+        src: "/tmp/linux-amd64/helm"
+        dest: "{{ helm_binary_path }}"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create Longhorn namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ longhorn_namespace }}"
+        state: present
+
+    - name: Add Longhorn Helm repository
+      ansible.builtin.command: helm repo add {{ longhorn_repo_name }} https://charts.longhorn.io
+      register: helm_repo_add
+      changed_when: "'has been added' in helm_repo_add.stdout or 'already exists' not in helm_repo_add.stderr"
+
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update
+
+    - name: Install Longhorn via Helm
+      ansible.builtin.command: >
+        helm upgrade --install longhorn {{ longhorn_chart }}
+        --namespace {{ longhorn_namespace }}
+        --version {{ longhorn_chart_version }}
+        --set defaultSettings.defaultDataPath="/var/lib/longhorn"
+        --create-namespace
