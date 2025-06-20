@@ -1,45 +1,35 @@
 - name: Register SSH Git repository with Argo CD
   hosts: localhost
-  become: true
+  become: false
   gather_facts: false
+
+  vars:
+    ssh_key_path: /tmp/argocd_git_ssh_key
+    ssh_key_pub_path: /tmp/argocd_git_ssh_key.pub
 
   tasks:
     - name: Generate SSH key pair for Argo CD (if not exists)
-      command: ssh-keygen -t rsa -b 4096 -C "argocd@local" -f /tmp/argocd_git_ssh_key -N ""
+      command: ssh-keygen -t rsa -b 4096 -C "argocd@local" -f {{ ssh_key_path }} -N ""
       args:
-        creates: /tmp/argocd_git_ssh_key
+        creates: "{{ ssh_key_path }}"
 
-    - name: Temporarily relax private key permissions for Ansible to read
-      file:
-        path: /tmp/argocd_git_ssh_key
-        mode: '0644'
+    - name: Read private key
+      slurp:
+        src: "{{ ssh_key_path }}"
+      register: slurped_ssh_key
 
-    - name: Create Argo CD Git SSH Secret manifest
-      copy:
+    - name: Decode private key to string
+      set_fact:
+        ssh_private_key: "{{ slurped_ssh_key['content'] | b64decode }}"
+
+    - name: Render secret manifest from template
+      template:
+        src: templates/argocd-ssh-secret.yaml.j2
         dest: /tmp/argocd-ssh-repo-secret.yaml
-        content: |
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: repo-ssh-sampleapp
-            namespace: argocd
-            labels:
-              argocd.argoproj.io/secret-type: repository
-          type: Opaque
-          stringData:
-            type: git
-            url: git@github.com:kansagarahitesh/sampleapp.git
-            sshPrivateKey: |
-          {{ lookup('file', '/tmp/argocd_git_ssh_key') | indent(14) }}
 
     - name: Apply Argo CD Git SSH repo secret
       command: kubectl apply -f /tmp/argocd-ssh-repo-secret.yaml
 
-    - name: Restore SSH private key permissions to 0600
-      file:
-        path: /tmp/argocd_git_ssh_key
-        mode: '0600'
-
     - name: Show public key to add as GitHub Deploy Key
       debug:
-        msg: "Public SSH key for GitHub:\n{{ lookup('file', '/tmp/argocd_git_ssh_key.pub') }}"
+        msg: "{{ lookup('file', ssh_key_pub_path) }}"
