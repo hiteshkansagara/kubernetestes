@@ -1,33 +1,35 @@
-- name: Ensure SSH key exists for Argo CD
+- name: Register SSH Git repository with Argo CD
+  hosts: localhost
   become: true
-  command: ssh-keygen -t rsa -b 4096 -C "argocd@local" -f /tmp/argocd_git_ssh_key -N ""
-  args:
-    creates: /tmp/argocd_git_ssh_key
+  gather_facts: false
 
-- name: Create Argo CD Git SSH Secret manifest
-  become: true
-  copy:
-    dest: /tmp/argocd-ssh-repo-secret.yaml
-    content: |
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: repo-ssh-sampleapp
-        namespace: argocd
-        labels:
-          argocd.argoproj.io/secret-type: repository
-      type: Opaque
-      stringData:
-        type: git
-        url: git@github.com:kansagarahitesh/sampleapp.git
-        sshPrivateKey: |
-      {{ lookup('file', '/tmp/argocd_git_ssh_key') | indent(10) }}
+  tasks:
+    - name: Ensure SSH key exists for Argo CD
+      command: ssh-keygen -t rsa -b 4096 -C "argocd@local" -f /tmp/argocd_git_ssh_key -N ""
+      args:
+        creates: /tmp/argocd_git_ssh_key
 
-- name: Apply Argo CD SSH Git repo secret
-  become: true
-  command: kubectl apply -f /tmp/argocd-ssh-repo-secret.yaml
+    - name: Create Argo CD Git SSH Secret manifest
+      copy:
+        dest: /tmp/argocd-ssh-repo-secret.yaml
+        content: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: repo-ssh-sampleapp
+            namespace: argocd
+            labels:
+              argocd.argoproj.io/secret-type: repository
+          type: Opaque
+          stringData:
+            type: git
+            url: git@github.com:kansagarahitesh/sampleapp.git
+            sshPrivateKey: |
+            {{ lookup('file', '/tmp/argocd_git_ssh_key') | indent(14) }}
 
-- name: Show public key to add as GitHub Deploy Key
-  become: true
-  debug:
-    msg: "{{ lookup('file', '/tmp/argocd_git_ssh_key.pub') }}"
+    - name: Apply Argo CD Git SSH repo secret
+      command: kubectl apply -f /tmp/argocd-ssh-repo-secret.yaml
+
+    - name: Show public key to add as GitHub Deploy Key
+      debug:
+        msg: "{{ lookup('file', '/tmp/argocd_git_ssh_key.pub') }}"
