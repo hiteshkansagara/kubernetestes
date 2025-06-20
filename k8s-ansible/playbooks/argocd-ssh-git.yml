@@ -1,6 +1,6 @@
 - name: Register SSH Git repository with Argo CD
   hosts: localhost
-  become: false
+  become: true
   gather_facts: false
 
   vars:
