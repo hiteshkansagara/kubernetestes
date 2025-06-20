@@ -4,10 +4,15 @@
   gather_facts: false
 
   tasks:
-    - name: Ensure SSH key exists for Argo CD
+    - name: Generate SSH key pair for Argo CD (if not exists)
       command: ssh-keygen -t rsa -b 4096 -C "argocd@local" -f /tmp/argocd_git_ssh_key -N ""
       args:
         creates: /tmp/argocd_git_ssh_key
+
+    - name: Temporarily relax private key permissions for Ansible to read
+      file:
+        path: /tmp/argocd_git_ssh_key
+        mode: '0644'
 
     - name: Create Argo CD Git SSH Secret manifest
       copy:
@@ -25,11 +30,16 @@
             type: git
             url: git@github.com:kansagarahitesh/sampleapp.git
             sshPrivateKey: |
-            {{ lookup('file', '/tmp/argocd_git_ssh_key') | indent(14) }}
+          {{ lookup('file', '/tmp/argocd_git_ssh_key') | indent(14) }}
 
     - name: Apply Argo CD Git SSH repo secret
       command: kubectl apply -f /tmp/argocd-ssh-repo-secret.yaml
 
+    - name: Restore SSH private key permissions to 0600
+      file:
+        path: /tmp/argocd_git_ssh_key
+        mode: '0600'
+
     - name: Show public key to add as GitHub Deploy Key
       debug:
-        msg: "{{ lookup('file', '/tmp/argocd_git_ssh_key.pub') }}"
+        msg: "Public SSH key for GitHub:\n{{ lookup('file', '/tmp/argocd_git_ssh_key.pub') }}"
